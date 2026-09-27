@@ -1,0 +1,227 @@
+/* ==========================================================================
+   LegisCore — base.css
+   Design tokens, reset, typography primitives.
+   Every other CSS file depends on these variables.
+   ========================================================================== */
+
+:root {
+    /* Brand colors */
+    --primary:          #1e3a8a;
+    --primary-hover:    #1e40af;
+    --primary-light:    #3b5ba9;
+    --primary-soft:     #eef2ff;
+
+    /* Neutrals */
+    --bg:               #f8fafc;
+    --surface:          #ffffff;
+    --surface-muted:    #f1f5f9;
+    --border:           #cbd5e1;
+    --border-soft:      #e2e8f0;
+
+    /* Text */
+    --text:             #1e293b;
+    --text-muted:       #64748b;
+    --text-faint:       #94a3b8;
+
+    /* Semantic */
+    --success:          #15803d;
+    --success-soft:     #dcfce7;
+    --warning:          #b45309;
+    --warning-soft:     #fef3c7;
+    --danger:           #b91c1c;
+    --danger-soft:      #fee2e2;
+    --info:             #0369a1;
+    --info-soft:        #e0f2fe;
+
+    /* Spacing scale */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 24px;
+    --space-6: 32px;
+    --space-7: 48px;
+
+    /* Radius */
+    --radius-sm: 4px;
+    --radius:    8px;
+    --radius-lg: 12px;
+    --radius-full: 999px;
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+    --shadow:    0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04);
+    --shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.08), 0 2px 4px -2px rgba(15, 23, 42, 0.05);
+    --shadow-lg: 0 10px 15px -3px rgba(15, 23, 42, 0.08), 0 4px 6px -4px rgba(15, 23, 42, 0.05);
+
+    /* Layout */
+    --topbar-h:  60px;
+    --sidebar-w: 240px;
+
+    /* Typography */
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                 Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+
+    --fs-xs: 12px;
+    --fs-sm: 13px;
+    --fs-base: 14px;
+    --fs-md: 15px;
+    --fs-lg: 18px;
+    --fs-xl: 22px;
+    --fs-2xl: 28px;
+
+    --lh-tight: 1.25;
+    --lh-base: 1.5;
+    --lh-loose: 1.7;
+
+    /* Transitions */
+    --transition-fast: 120ms ease;
+    --transition:      180ms ease;
+}
+
+/* ---- Reset ---------------------------------------------------------- */
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+}
+
+body {
+    font-family: var(--font-sans);
+    font-size: var(--fs-base);
+    line-height: var(--lh-base);
+    color: var(--text);
+    background: var(--bg);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    margin: 0 0 var(--space-3) 0;
+    font-weight: 600;
+    line-height: var(--lh-tight);
+    color: var(--text);
+    letter-spacing: -0.01em;
+}
+
+h1 { font-size: var(--fs-2xl); }
+h2 { font-size: var(--fs-xl); }
+h3 { font-size: var(--fs-lg); }
+h4 { font-size: var(--fs-md); }
+
+p {
+    margin: 0 0 var(--space-3) 0;
+}
+
+a {
+    color: var(--primary);
+    text-decoration: none;
+    transition: color var(--transition-fast);
+}
+
+a:hover {
+    color: var(--primary-hover);
+    text-decoration: underline;
+}
+
+img, svg {
+    display: block;
+    max-width: 100%;
+}
+
+button {
+    font-family: inherit;
+    font-size: inherit;
+    cursor: pointer;
+}
+
+input, select, textarea {
+    font-family: inherit;
+    font-size: inherit;
+    color: inherit;
+}
+
+code, kbd, pre {
+    font-family: var(--font-mono);
+    font-size: var(--fs-sm);
+}
+
+ul, ol {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+hr {
+    border: 0;
+    border-top: 1px solid var(--border-soft);
+    margin: var(--space-4) 0;
+}
+
+/* ---- Utility text --------------------------------------------------- */
+
+.text-xs      { font-size: var(--fs-xs); }
+.text-sm      { font-size: var(--fs-sm); }
+.text-muted   { color: var(--text-muted); }
+.text-faint   { color: var(--text-faint); }
+.text-danger  { color: var(--danger); }
+.text-success { color: var(--success); }
+.text-warning { color: var(--warning); }
+.text-center  { text-align: center; }
+.text-right   { text-align: right; }
+
+.font-weight-bold   { font-weight: 600; }
+.font-weight-medium { font-weight: 500; }
+
+/* ---- Scrollbar ------------------------------------------------------ */
+
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: var(--radius-full);
+    border: 2px solid var(--bg);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--text-faint);
+}
+
+/* ---- Focus ring ----------------------------------------------------- */
+
+:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+}
+
+/* ---- Visually hidden but accessible to screen readers --------------- */
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
