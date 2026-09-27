@@ -1,22 +1,18 @@
 /**
  * LegisCore Configuration
- * Defines global constants, API base URLs, data mode switches, and feature flags.
+ * Backend: Supabase (shared project with PXDynasty, lc_ prefixed tables)
  */
 
 (function(window) {
     'use strict';
 
     const CONFIG = {
-        // API Base URL - can be overridden via localStorage or window.__LEGISCORE_API_URL__
-        API_BASE_URL: window.__LEGISCORE_API_URL__ || localStorage.getItem('legiscore_api_url') || 'http://localhost:8000/api',
+        SUPABASE_URL: window.__LEGISCORE_SUPABASE_URL__ || 'https://ocsglgkombwwpamdijes.supabase.co',
+        SUPABASE_ANON_KEY: window.__LEGISCORE_SUPABASE_ANON_KEY__ || 'sb_publishable_6HHZQ1MoXmpvi45SD2k9fw_Rj_c3gGB',
 
-        // Data Mode: 'api' for backend connection, 'mock' for local fallback/simulation
         DATA_MODE: window.__LEGISCORE_DATA_MODE__ || localStorage.getItem('legiscore_data_mode') || 'api',
-
-        // Request timeout in milliseconds
         TIMEOUT_MS: 30000,
 
-        // Feature flags for progressive rollout
         FEATURES: {
             ANALYTICS_ENABLED: true,
             ADVANCED_SEARCH: true,
@@ -24,16 +20,18 @@
             AUDIT_LOGS: true
         },
 
-        // Storage keys
         STORAGE_KEYS: {
             TOKEN: 'legiscore_auth_token',
+            REFRESH_TOKEN: 'legiscore_refresh_token',
             USER: 'legiscore_current_user',
             THEME: 'legiscore_theme',
             PREFERENCES: 'legiscore_preferences'
         }
     };
 
-    // Freeze config to prevent tampering
+    CONFIG.AUTH_BASE = CONFIG.SUPABASE_URL + '/auth/v1';
+    CONFIG.REST_BASE = CONFIG.SUPABASE_URL + '/rest/v1';
+
     if (Object.freeze) {
         Object.freeze(CONFIG);
         Object.freeze(CONFIG.FEATURES);

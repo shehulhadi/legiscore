@@ -223,11 +223,11 @@
                 submitBtn.textContent = 'Signing in...';
 
                 try {
-                    if (!window.LegisCoreAPI || !window.LegisCoreAPI.auth) {
+                    if (!window.LegisCoreApi || !window.LegisCoreApi.authApi) {
                         throw new Error('Authentication API module not loaded properly.');
                     }
 
-                    await window.LegisCoreAPI.auth.login(email, password);
+                    await window.LegisCoreApi.authApi.login(email, password);
                     
                     // Successful login - redirect to app index or dashboard
                     window.location.href = './index.html';

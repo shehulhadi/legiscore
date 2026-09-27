@@ -1,7 +1,7 @@
 /**
- * LegisCore API Client
- * Centralized fetch wrapper handling auth headers, timeouts, error handling (401, 403, 404, 422, 429, 500),
- * and fallback mock data integration when DATA_MODE is set to 'mock'.
+ * LegisCore API Client (Supabase)
+ * Centralized fetch wrapper. Handles apikey/Bearer headers, timeouts,
+ * Supabase error shapes, and 401 session-clearing.
  */
 
 (function(window) {
@@ -10,6 +10,7 @@
     const CONFIG = window.LegisCoreConfig;
     if (!CONFIG) {
         console.error('LegisCoreConfig is required before loading api.js');
+        return;
     }
 
     class ApiError extends Error {
@@ -21,93 +22,95 @@
         }
     }
 
-    async function request(endpoint, options = {}) {
-        const baseUrl = CONFIG ? CONFIG.API_BASE_URL : 'http://localhost:8000/api';
-        const isMock = CONFIG && CONFIG.DATA_MODE === 'mock';
+    function getAccessToken() {
+        return localStorage.getItem(CONFIG.STORAGE_KEYS.TOKEN);
+    }
 
-        // If mock mode is active and mock handler exists, we could route through it if needed,
-        // but for now let's build the central fetch wrapper.
-        
-        const url = endpoint.startsWith('http') ? endpoint : `${baseUrl}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
+    function buildHeaders(options) {
+        const headers = Object.assign({}, options.headers);
 
-        const headers = {
-            'Content-Type': 'application/json',
-            ...options.headers
-        };
-
-        // Attach Authorization header if token exists in localStorage
-        const tokenKey = CONFIG ? CONFIG.STORAGE_KEYS.TOKEN : 'legiscore_auth_token';
-        const token = localStorage.getItem(tokenKey);
-        if (token && !headers['Authorization']) {
-            headers['Authorization'] = `Bearer ${token}`;
+        // Supabase requires apikey on every request
+        if (!headers['apikey']) {
+            headers['apikey'] = CONFIG.SUPABASE_ANON_KEY;
         }
 
-        const config = {
-            ...options,
-            headers
-        };
+        // Only set Content-Type when a body is present, so GETs stay clean
+        if (options.body && !headers['Content-Type']) {
+            headers['Content-Type'] = 'application/json';
+        }
 
-        // Timeout handling using AbortController
-        const timeoutMs = CONFIG ? CONFIG.TIMEOUT_MS : 30000;
+        // Prefer the user's access token; fall back to the anon key
+        if (!headers['Authorization']) {
+            const token = getAccessToken();
+            headers['Authorization'] = 'Bearer ' + (token || CONFIG.SUPABASE_ANON_KEY);
+        }
+
+        return headers;
+    }
+
+    function extractErrorMessage(status, data, fallback) {
+        if (data && typeof data === 'object') {
+            return (
+                data.error_description ||
+                data.msg ||
+                data.message ||
+                data.error ||
+                fallback ||
+                'Request failed'
+            );
+        }
+        if (typeof data === 'string' && data.length) return data;
+        return fallback || 'Request failed';
+    }
+
+    async function request(url, options = {}) {
+        const finalUrl = url.startsWith('http') ? url : (CONFIG.SUPABASE_URL + url);
+
+        const config = Object.assign({}, options, {
+            headers: buildHeaders(options)
+        });
+
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+        const timeoutId = setTimeout(() => controller.abort(), CONFIG.TIMEOUT_MS);
         config.signal = controller.signal;
 
         try {
-            const response = await fetch(url, config);
+            const response = await fetch(finalUrl, config);
             clearTimeout(timeoutId);
 
-            // Handle No Content response
-            if (response.status === 204) {
-                return null;
-            }
+            if (response.status === 204) return null;
 
             let data = null;
-            const contentType = response.headers.get('content-type');
-            if (contentType && contentType.includes('application/json')) {
-                try {
-                    data = await response.json();
-                } catch (e) {
-                    data = null;
-                }
+            const ct = response.headers.get('content-type') || '';
+            if (ct.includes('application/json')) {
+                try { data = await response.json(); } catch (_) { data = null; }
             } else {
                 data = await response.text();
             }
 
             if (!response.ok) {
-                let errorMessage = (data && (data.message || data.error)) || response.statusText || 'Request failed';
-                
-                // Specific status code handling per requirements (401, 403, 404, 422, 429, 500)
-                switch (response.status) {
-                    case 401:
-                        // Unauthorized - clear token/user and trigger auth expired event or redirect
-                        console.warn('API 401 Unauthorized: clearing session');
-                        localStorage.removeItem(tokenKey);
-                        if (CONFIG && CONFIG.STORAGE_KEYS && CONFIG.STORAGE_KEYS.USER) {
-                            localStorage.removeItem(CONFIG.STORAGE_KEYS.USER);
-                        }
-                        window.dispatchEvent(new CustomEvent('legiscore:unauthorized', { detail: { endpoint } }));
-                        break;
-                    case 403:
-                        console.warn('API 403 Forbidden:', endpoint);
-                        break;
-                    case 404:
-                        console.warn('API 404 Not Found:', endpoint);
-                        break;
-                    case 422:
-                        console.warn('API 422 Unprocessable Entity / Validation Error');
-                        break;
-                    case 429:
-                        console.warn('API 429 Rate Limited');
-                        break;
-                    case 500:
-                        console.error('API 500 Internal Server Error');
-                        break;
-                    default:
-                        break;
+                const message = extractErrorMessage(response.status, data, response.statusText);
+
+                if (response.status === 401) {
+                    localStorage.removeItem(CONFIG.STORAGE_KEYS.TOKEN);
+                    localStorage.removeItem(CONFIG.STORAGE_KEYS.REFRESH_TOKEN);
+                    localStorage.removeItem(CONFIG.STORAGE_KEYS.USER);
+                    window.dispatchEvent(new CustomEvent('legiscore:unauthorized', {
+                        detail: { url: finalUrl }
+                    }));
+                } else if (response.status === 403) {
+                    console.warn('API 403 Forbidden:', finalUrl);
+                } else if (response.status === 404) {
+                    console.warn('API 404 Not Found:', finalUrl);
+                } else if (response.status === 422) {
+                    console.warn('API 422 Validation Error:', data);
+                } else if (response.status === 429) {
+                    console.warn('API 429 Rate Limited');
+                } else if (response.status >= 500) {
+                    console.error('API', response.status, 'Server Error');
                 }
 
-                throw new ApiError(response.status, errorMessage, data);
+                throw new ApiError(response.status, message, data);
             }
 
             return data;
@@ -115,24 +118,33 @@
         } catch (error) {
             clearTimeout(timeoutId);
             if (error.name === 'AbortError') {
-                throw new ApiError(408, 'Request timeout exceeded', { timeout: timeoutMs });
+                throw new ApiError(408, 'Request timeout exceeded', { timeout: CONFIG.TIMEOUT_MS });
             }
-            if (error instanceof ApiError) {
-                throw error;
-            }
-            // Network or other fetch errors
-            throw new ApiError(0, error.message || 'Network error or service unavailable', { originalError: error.toString() });
+            if (error instanceof ApiError) throw error;
+            throw new ApiError(0, error.message || 'Network error', { originalError: String(error) });
         }
+    }
+
+    function authRequest(path, options = {}) {
+        const p = path.startsWith('/') ? path : '/' + path;
+        return request(CONFIG.AUTH_BASE + p, options);
+    }
+
+    function restRequest(path, options = {}) {
+        const p = path.startsWith('/') ? path : '/' + path;
+        return request(CONFIG.REST_BASE + p, options);
     }
 
     window.LegisCoreApi = {
         request,
+        auth: authRequest,
+        rest: restRequest,
         ApiError,
-        get: (endpoint, options) => request(endpoint, { ...options, method: 'GET' }),
-        post: (endpoint, body, options) => request(endpoint, { ...options, method: 'POST', body: JSON.stringify(body) }),
-        put: (endpoint, body, options) => request(endpoint, { ...options, method: 'PUT', body: JSON.stringify(body) }),
-        patch: (endpoint, body, options) => request(endpoint, { ...options, method: 'PATCH', body: JSON.stringify(body) }),
-        delete: (endpoint, options) => request(endpoint, { ...options, method: 'DELETE' })
+        get: (url, options) => request(url, Object.assign({}, options, { method: 'GET' })),
+        post: (url, body, options) => request(url, Object.assign({}, options, { method: 'POST', body: JSON.stringify(body) })),
+        put: (url, body, options) => request(url, Object.assign({}, options, { method: 'PUT', body: JSON.stringify(body) })),
+        patch: (url, body, options) => request(url, Object.assign({}, options, { method: 'PATCH', body: JSON.stringify(body) })),
+        delete: (url, options) => request(url, Object.assign({}, options, { method: 'DELETE' }))
     };
 
 })(window);
