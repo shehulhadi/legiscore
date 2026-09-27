@@ -69,7 +69,13 @@
         router.register('dashboard', {
             title: 'Dashboard',
             allowedRoles: BOTH,
-            render: placeholder('Dashboard', 'Deadlines, awaiting-digitization, expiring agreements.'),
+            render: function(container) {
+                if (window.LegisCoreDashboard && typeof window.LegisCoreDashboard.render === 'function') {
+                    window.LegisCoreDashboard.render(container);
+                } else {
+                    placeholder('Dashboard', 'Dashboard module failed to load.')();
+                }
+            },
         });
 
         router.register('documents', {
