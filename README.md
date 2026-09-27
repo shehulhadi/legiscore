@@ -1,0 +1,1 @@
+LegiScore is a platform for tracking, evaluating, and scoring legislative bills and representatives.
