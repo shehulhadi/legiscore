@@ -81,7 +81,13 @@
         router.register('documents', {
             title: 'Documents',
             allowedRoles: BOTH,
-            render: placeholder('Documents', 'Search, preview, upload, tag.'),
+            render: function(container) {
+                if (window.LegisCoreDocuments && typeof window.LegisCoreDocuments.render === 'function') {
+                    window.LegisCoreDocuments.render(container);
+                } else {
+                    placeholder('Documents', 'Documents module failed to load.')();
+                }
+            },
         });
 
         router.register('matters', {
