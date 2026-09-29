@@ -58,6 +58,14 @@
         return !!(u && u.role === 'administrator');
     }
 
+    const ALLOWED_EXT = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png', '.txt'];
+
+    function isAllowedFile(file) {
+        if (!file || !file.name) return false;
+        const lower = file.name.toLowerCase();
+        return ALLOWED_EXT.some(function(ext) { return lower.endsWith(ext); });
+    }
+
     function humanSize(bytes) {
         if (!bytes || typeof bytes !== 'number') return '';
         if (bytes < 1024) return bytes + ' B';
@@ -301,7 +309,7 @@
         html +=
             '<div id="doc-file-picker-wrap" style="' + (hasStored ? 'display:none;margin-top:var(--space-2)' : '') + '">' +
                 '<input type="file" id="doc-file-input" class="form-control" ' +
-                    'accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.txt" style="padding:var(--space-2)">' +
+                    'style="padding:var(--space-2)">' +
                 '<div class="form-hint">Max ' + storageApi.MAX_FILE_MB + ' MB. PDF, DOCX, images, or text.</div>' +
                 '<div id="doc-file-picked" class="text-sm text-muted" style="margin-top:var(--space-2)"></div>' +
             '</div>';
@@ -349,7 +357,15 @@
         }
         if (input) {
             input.addEventListener('change', function() {
-                pickedFile = input.files && input.files[0] ? input.files[0] : null;
+                const f = input.files && input.files[0] ? input.files[0] : null;
+                if (f && !isAllowedFile(f)) {
+                    alert('Only PDF, Word (.doc/.docx), image, or .txt files are allowed.');
+                    input.value = '';
+                    pickedFile = null;
+                    if (pickedEl) pickedEl.textContent = '';
+                    return;
+                }
+                pickedFile = f;
                 if (pickedEl) {
                     pickedEl.textContent = pickedFile
                         ? pickedFile.name + ' — ' + humanSize(pickedFile.size)
