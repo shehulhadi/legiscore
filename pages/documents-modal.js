@@ -1,13 +1,15 @@
 /**
  * LegisCore — pages/documents-modal.js
- * Metadata + file modal for a single document: view, edit, create,
- * delete, attach file, download.
- * Exposes window.LegisCoreDocumentsModal.
+ * Document modal with three modes:
+ *   view  — read-only details + actions (Download, Edit, Delete)
+ *   edit  — editable form (also handles replace-file upload)
+ *   new   — create a fresh document (optionally with a file)
  *
- * Attach flow:
- *   - create: generate id -> upload bytes to storage -> insert row
- *   - edit:   if new file picked -> upload (upsert) -> update row
- *   - download: signed URL, expires in 1 hour
+ * Entry points:
+ *   open(id, onDone)   -> starts in view mode
+ *   openNew(onDone)    -> create mode
+ *
+ * Exposes window.LegisCoreDocumentsModal.
  */
 
 (function(window) {
@@ -40,7 +42,7 @@
     let currentId = null;
     let currentRow = null;
     let isAdmin = false;
-    let pickedFile = null;   // File object from the picker, or null
+    let pickedFile = null;
     let busy = false;
 
     function esc(s) {
@@ -61,6 +63,28 @@
         if (bytes < 1024) return bytes + ' B';
         if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
         return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    function fmtDate(iso, withTime) {
+        if (!iso) return '—';
+        const d = new Date(iso);
+        if (isNaN(d.getTime())) return '—';
+        const opts = { day: 'numeric', month: 'short', year: 'numeric' };
+        if (withTime) { opts.hour = '2-digit'; opts.minute = '2-digit'; }
+        return d.toLocaleDateString(undefined, opts);
+    }
+
+    function typeLabel(t) {
+        return t || 'Uncategorised';
+    }
+
+    function statusBadge(status) {
+        const s = String(status || '').toLowerCase();
+        if (s === 'verified')     return '<span class="badge badge-success">Verified</span>';
+        if (s === 'needs_review') return '<span class="badge badge-warning">Needs review</span>';
+        if (s === 'expiring')     return '<span class="badge badge-danger">Expiring</span>';
+        if (s === 'archived')     return '<span class="badge badge-muted">Archived</span>';
+        return '<span class="badge badge-muted">' + esc(status || '—') + '</span>';
     }
 
     function close() {
@@ -97,7 +121,7 @@
                     '</button>' +
                 '</div>' +
                 '<div class="modal-body">' + bodyHtml + '</div>' +
-                '<div class="modal-footer">' + footerHtml + '</div>' +
+                (footerHtml ? '<div class="modal-footer">' + footerHtml + '</div>' : '') +
             '</div>';
 
         const closeBtn = bd.querySelector('#doc-modal-close');
@@ -109,7 +133,7 @@
     function showLoading(label) {
         renderShell(label || 'Document',
             '<div class="view-loading"><div class="spinner"></div><p class="text-sm">' +
-            esc(label ? label + '...' : 'Loading...') + '</p></div>',
+            esc(label || 'Loading...') + '</p></div>',
             '');
     }
 
@@ -123,6 +147,117 @@
         const c = backdropEl.querySelector('#doc-modal-cancel');
         if (c) c.addEventListener('click', close);
     }
+
+    // ================================================================
+    // VIEW MODE
+    // ================================================================
+
+    function fileBlockHtml(row) {
+        if (row.storage_key) {
+            return (
+                '<div style="border:1px solid var(--border-soft);border-radius:var(--radius);padding:var(--space-3);background:var(--surface)">' +
+                    '<div style="display:flex;justify-content:space-between;align-items:center;gap:var(--space-3);flex-wrap:wrap">' +
+                        '<div style="min-width:0;flex:1">' +
+                            '<div class="text-sm font-weight-medium" style="overflow:hidden;text-overflow:ellipsis">' +
+                                esc(row.name || 'file') +
+                            '</div>' +
+                            '<div class="text-xs text-muted">' +
+                                (row.mime_type ? esc(row.mime_type) + ' &middot; ' : '') +
+                                (row.file_size ? esc(humanSize(row.file_size)) : '') +
+                            '</div>' +
+                        '</div>' +
+                        '<button type="button" class="btn btn-primary btn-sm" id="doc-download">Download</button>' +
+                    '</div>' +
+                '</div>'
+            );
+        }
+        return (
+            '<div style="border:1px dashed var(--border);border-radius:var(--radius);padding:var(--space-4);background:var(--surface-muted);text-align:center">' +
+                '<div class="text-sm text-muted">No file attached yet.</div>' +
+                '<div class="text-xs text-muted" style="margin-top:var(--space-1)">Click Edit to attach one.</div>' +
+            '</div>'
+        );
+    }
+
+    function metaRow(label, value) {
+        return (
+            '<div style="display:grid;grid-template-columns:120px 1fr;gap:var(--space-3);padding:var(--space-2) 0;border-bottom:1px solid var(--border-soft)">' +
+                '<div class="text-xs text-muted" style="text-transform:uppercase;letter-spacing:0.05em;font-weight:600;padding-top:2px">' + esc(label) + '</div>' +
+                '<div class="text-sm">' + (value || '—') + '</div>' +
+            '</div>'
+        );
+    }
+
+    function renderDetailsView(row) {
+        const matter = row.lc_matters
+            ? (row.lc_matters.matter_number
+                ? row.lc_matters.matter_number + ' — ' + row.lc_matters.title
+                : row.lc_matters.title)
+            : null;
+        const client = row.lc_clients ? row.lc_clients.name : null;
+
+        const headerBlock =
+            '<div style="margin-bottom:var(--space-4)">' +
+                '<div style="font-size:var(--fs-lg);font-weight:600;line-height:1.3">' + esc(row.name) + '</div>' +
+                '<div style="display:flex;gap:var(--space-2);margin-top:var(--space-2);flex-wrap:wrap">' +
+                    '<span class="badge badge-muted">' + esc(typeLabel(row.document_type)) + '</span>' +
+                    statusBadge(row.status) +
+                '</div>' +
+            '</div>';
+
+        const fileSection =
+            '<div style="margin-bottom:var(--space-4)">' +
+                '<div class="text-xs text-muted" style="text-transform:uppercase;letter-spacing:0.05em;font-weight:600;margin-bottom:var(--space-2)">File</div>' +
+                fileBlockHtml(row) +
+            '</div>';
+
+        const detailsSection =
+            '<div style="margin-bottom:var(--space-2)">' +
+                '<div class="text-xs text-muted" style="text-transform:uppercase;letter-spacing:0.05em;font-weight:600;margin-bottom:var(--space-2)">Details</div>' +
+                metaRow('Matter', matter ? esc(matter) : null) +
+                metaRow('Client', client ? esc(client) : null) +
+                metaRow('Source',  row.source ? esc(row.source) : null) +
+                (row.page_count ? metaRow('Pages', esc(row.page_count)) : '') +
+                metaRow('Created', fmtDate(row.created_at, true)) +
+                metaRow('Updated', fmtDate(row.updated_at, true)) +
+                metaRow('Expires', row.expires_at ? fmtDate(row.expires_at) : 'No expiry set') +
+            '</div>';
+
+        const footer =
+            (isAdmin ? '<button class="btn btn-ghost btn-sm" id="doc-delete" style="color:var(--danger)">Delete</button>' : '') +
+            '<div style="flex:1"></div>' +
+            '<button class="btn btn-secondary" id="doc-close">Close</button>' +
+            '<button class="btn btn-primary" id="doc-edit">Edit</button>';
+
+        renderShell('Document details', headerBlock + fileSection + detailsSection, footer);
+
+        const closeBtn = backdropEl.querySelector('#doc-close');
+        if (closeBtn) closeBtn.addEventListener('click', function() { if (!busy) close(); });
+
+        const editBtn = backdropEl.querySelector('#doc-edit');
+        if (editBtn) editBtn.addEventListener('click', function() { renderEditView(currentRow); });
+
+        const delBtn = backdropEl.querySelector('#doc-delete');
+        if (delBtn) delBtn.addEventListener('click', doDelete);
+
+        const dlBtn = backdropEl.querySelector('#doc-download');
+        if (dlBtn) dlBtn.addEventListener('click', function() {
+            dlBtn.disabled = true;
+            dlBtn.textContent = 'Opening...';
+            storageApi.getSignedUrl(row.storage_key, 3600).then(function(url) {
+                window.open(url, '_blank');
+            }).catch(function(err) {
+                alert('Could not open file: ' + (err.message || 'unknown error'));
+            }).finally(function() {
+                dlBtn.disabled = false;
+                dlBtn.textContent = 'Download';
+            });
+        });
+    }
+
+    // ================================================================
+    // EDIT MODE
+    // ================================================================
 
     function typeOptions(selected) {
         return ['<option value="">— Select —</option>']
@@ -147,51 +282,33 @@
         return y + '-' + m + '-' + day;
     }
 
-    function fileSectionHtml(row) {
+    function editFileSectionHtml(row) {
         const hasStored = row && row.storage_key;
-        const lines = [];
-
+        let html = '';
         if (hasStored) {
-            lines.push(
+            html +=
                 '<div style="display:flex;justify-content:space-between;align-items:center;gap:var(--space-3);padding:var(--space-3);background:var(--surface-muted);border-radius:var(--radius)">' +
                     '<div style="min-width:0">' +
-                        '<div class="text-sm font-weight-medium" style="overflow:hidden;text-overflow:ellipsis">' +
-                            esc(row.name || 'file') +
-                        '</div>' +
+                        '<div class="text-sm font-weight-medium">Current file</div>' +
                         '<div class="text-xs text-muted">' +
                             (row.mime_type ? esc(row.mime_type) + ' &middot; ' : '') +
-                            esc(humanSize(row.file_size)) +
+                            (row.file_size ? esc(humanSize(row.file_size)) : '') +
                         '</div>' +
                     '</div>' +
-                    '<div style="display:flex;gap:var(--space-2)">' +
-                        '<button type="button" class="btn btn-secondary btn-sm" id="doc-download">Download</button>' +
-                        '<button type="button" class="btn btn-ghost btn-sm" id="doc-replace-toggle">Replace</button>' +
-                    '</div>' +
-                '</div>'
-            );
+                    '<button type="button" class="btn btn-secondary btn-sm" id="doc-replace-toggle">Replace</button>' +
+                '</div>';
         }
-
-        lines.push(
+        html +=
             '<div id="doc-file-picker-wrap" style="' + (hasStored ? 'display:none;margin-top:var(--space-2)' : '') + '">' +
                 '<input type="file" id="doc-file-input" class="form-control" ' +
-                    'accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.txt" ' +
-                    'style="padding:var(--space-2)">' +
+                    'accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.txt" style="padding:var(--space-2)">' +
                 '<div class="form-hint">Max ' + storageApi.MAX_FILE_MB + ' MB. PDF, DOCX, images, or text.</div>' +
                 '<div id="doc-file-picked" class="text-sm text-muted" style="margin-top:var(--space-2)"></div>' +
-            '</div>'
-        );
-
-        if (!hasStored) {
-            lines.push('<div class="text-xs text-muted" style="margin-top:var(--space-2)">' +
-                'No file attached yet. Pick one above and it will upload when you save.' +
-            '</div>');
-        }
-
-        return lines.join('');
+            '</div>';
+        return html;
     }
 
-    function formHtml(row, opts) {
-        opts = opts || {};
+    function editFormHtml(row) {
         return (
             '<div class="form-group">' +
                 '<label for="doc-name">Document name</label>' +
@@ -213,37 +330,23 @@
                 '<input type="date" id="doc-expires" class="form-control" value="' + esc(toDateInput(row.expires_at)) + '">' +
             '</div>' +
             '<div class="form-group">' +
-                '<label>Attached file</label>' +
-                fileSectionHtml(row) +
+                '<label>File</label>' +
+                editFileSectionHtml(row) +
             '</div>'
         );
     }
 
-    function readForm() {
-        const name = (document.getElementById('doc-name') || {}).value || '';
-        const type = (document.getElementById('doc-type') || {}).value || '';
-        const status = (document.getElementById('doc-status') || {}).value || 'verified';
-        const exp = (document.getElementById('doc-expires') || {}).value || '';
-        return {
-            name: name.trim(),
-            document_type: type || null,
-            status: status,
-            expires_at: exp ? new Date(exp + 'T00:00:00Z').toISOString() : null,
-        };
-    }
-
-    function wireFilePicker() {
-        const input   = document.getElementById('doc-file-input');
+    function wireEditFilePicker() {
+        const input    = document.getElementById('doc-file-input');
         const pickedEl = document.getElementById('doc-file-picked');
-        const wrap    = document.getElementById('doc-file-picker-wrap');
-        const toggle  = document.getElementById('doc-replace-toggle');
+        const wrap     = document.getElementById('doc-file-picker-wrap');
+        const toggle   = document.getElementById('doc-replace-toggle');
 
         if (toggle && wrap) {
             toggle.addEventListener('click', function() {
                 wrap.style.display = (wrap.style.display === 'none') ? 'block' : 'none';
             });
         }
-
         if (input) {
             input.addEventListener('change', function() {
                 pickedFile = input.files && input.files[0] ? input.files[0] : null;
@@ -254,22 +357,58 @@
                 }
             });
         }
-
-        const downloadBtn = document.getElementById('doc-download');
-        if (downloadBtn && currentRow && currentRow.storage_key) {
-            downloadBtn.addEventListener('click', async function() {
-                downloadBtn.disabled = true;
-                try {
-                    const url = await storageApi.getSignedUrl(currentRow.storage_key, 3600);
-                    window.open(url, '_blank');
-                } catch (err) {
-                    alert('Could not open file: ' + (err.message || 'unknown error'));
-                } finally {
-                    downloadBtn.disabled = false;
-                }
-            });
-        }
     }
+
+    function readForm() {
+        const name   = (document.getElementById('doc-name')   || {}).value || '';
+        const type   = (document.getElementById('doc-type')   || {}).value || '';
+        const status = (document.getElementById('doc-status') || {}).value || 'verified';
+        const exp    = (document.getElementById('doc-expires')|| {}).value || '';
+        return {
+            name: name.trim(),
+            document_type: type || null,
+            status: status,
+            expires_at: exp ? new Date(exp + 'T00:00:00Z').toISOString() : null,
+        };
+    }
+
+    function renderEditView(row) {
+        renderShell('Edit document', editFormHtml(row),
+            '<button class="btn btn-secondary" id="doc-cancel">Cancel</button>' +
+            '<button class="btn btn-primary" id="doc-save">Save</button>'
+        );
+        wireEditFilePicker();
+
+        const saveBtn = backdropEl.querySelector('#doc-save');
+        if (saveBtn) saveBtn.addEventListener('click', saveExisting);
+
+        const cancelBtn = backdropEl.querySelector('#doc-cancel');
+        if (cancelBtn) cancelBtn.addEventListener('click', function() {
+            if (!busy) renderDetailsView(currentRow);  // back to view
+        });
+    }
+
+    // ================================================================
+    // NEW MODE
+    // ================================================================
+
+    function renderNewView() {
+        const draft = { name: '', document_type: '', status: 'verified', expires_at: null };
+        renderShell('New document', editFormHtml(draft),
+            '<button class="btn btn-secondary" id="doc-cancel">Cancel</button>' +
+            '<button class="btn btn-primary" id="doc-create">Create</button>'
+        );
+        wireEditFilePicker();
+
+        const cancelBtn = backdropEl.querySelector('#doc-cancel');
+        if (cancelBtn) cancelBtn.addEventListener('click', function() { if (!busy) close(); });
+        const createBtn = backdropEl.querySelector('#doc-create');
+        if (createBtn) createBtn.addEventListener('click', saveNew);
+    }
+
+    // ================================================================
+    // ACTIONS
+    // ================================================================
 
     async function saveExisting() {
         const patch = readForm();
@@ -281,18 +420,21 @@
 
         try {
             if (pickedFile) {
-                showLoading('Uploading file');
+                showLoading('Uploading file...');
                 busy = false;
                 const meta = await storageApi.uploadDocument(currentId, pickedFile);
                 patch.storage_key = meta.storage_key;
                 patch.mime_type   = meta.mime_type;
                 patch.file_size   = meta.file_size;
                 busy = true;
-                showLoading('Saving');
+                showLoading('Saving...');
             }
-            await docsApi.update(currentId, patch);
+            const updated = await docsApi.update(currentId, patch);
+            currentRow = updated || Object.assign({}, currentRow, patch);
+            pickedFile = null;
+            busy = false;
+            renderDetailsView(currentRow);
             if (onDoneCb) onDoneCb();
-            close();
         } catch (err) {
             showError(err.message || 'Could not save.');
         }
@@ -311,16 +453,13 @@
         try {
             let fileMeta = null;
             if (pickedFile) {
-                showLoading('Uploading file');
+                showLoading('Uploading file...');
                 busy = false;
                 fileMeta = await storageApi.uploadDocument(newId, pickedFile);
                 busy = true;
-                showLoading('Creating document');
+                showLoading('Creating document...');
             }
-            const row = Object.assign({}, patch, {
-                id: newId,
-                source: 'uploaded',
-            }, fileMeta || {});
+            const row = Object.assign({}, patch, { id: newId, source: 'uploaded' }, fileMeta || {});
             await docsApi.create(row);
             if (onDoneCb) onDoneCb();
             close();
@@ -349,37 +488,9 @@
         }
     }
 
-    function renderViewOrEdit(row) {
-        renderShell('Edit document', formHtml(row, {}),
-            (isAdmin ? '<button class="btn btn-danger" id="doc-delete" style="margin-right:auto">Delete</button>' : '') +
-            '<button class="btn btn-secondary" id="doc-cancel">Cancel</button>' +
-            '<button class="btn btn-primary" id="doc-save">Save</button>'
-        );
-        wireFilePicker();
-
-        const saveBtn = backdropEl.querySelector('#doc-save');
-        if (saveBtn) saveBtn.addEventListener('click', saveExisting);
-
-        const cancelBtn = backdropEl.querySelector('#doc-cancel');
-        if (cancelBtn) cancelBtn.addEventListener('click', function() { if (!busy) close(); });
-
-        const delBtn = backdropEl.querySelector('#doc-delete');
-        if (delBtn) delBtn.addEventListener('click', doDelete);
-    }
-
-    function renderNew() {
-        const draft = { name: '', document_type: '', status: 'verified', expires_at: null };
-        renderShell('New document', formHtml(draft, {}),
-            '<button class="btn btn-secondary" id="doc-cancel">Cancel</button>' +
-            '<button class="btn btn-primary" id="doc-create">Create</button>'
-        );
-        wireFilePicker();
-
-        const cancelBtn = backdropEl.querySelector('#doc-cancel');
-        if (cancelBtn) cancelBtn.addEventListener('click', function() { if (!busy) close(); });
-        const createBtn = backdropEl.querySelector('#doc-create');
-        if (createBtn) createBtn.addEventListener('click', saveNew);
-    }
+    // ================================================================
+    // ENTRY POINTS
+    // ================================================================
 
     async function open(id, onDone) {
         if (!id) return;
@@ -387,11 +498,11 @@
         currentId = id;
         pickedFile = null;
         isAdmin = isAdministrator();
-        showLoading('Loading document');
+        showLoading('Loading...');
         try {
             const row = await docsApi.get(id);
             currentRow = row;
-            renderViewOrEdit(row);
+            renderDetailsView(row);
         } catch (err) {
             showError(err.message || 'Could not load document.');
         }
@@ -403,7 +514,7 @@
         currentRow = null;
         pickedFile = null;
         isAdmin = isAdministrator();
-        renderNew();
+        renderNewView();
     }
 
     window.LegisCoreDocumentsModal = {
