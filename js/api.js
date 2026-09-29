@@ -144,7 +144,8 @@
         post: (url, body, options) => request(url, Object.assign({}, options, { method: 'POST', body: JSON.stringify(body) })),
         put: (url, body, options) => request(url, Object.assign({}, options, { method: 'PUT', body: JSON.stringify(body) })),
         patch: (url, body, options) => request(url, Object.assign({}, options, { method: 'PATCH', body: JSON.stringify(body) })),
-        delete: (url, options) => request(url, Object.assign({}, options, { method: 'DELETE' }))
+        delete: (url, options) => request(url, Object.assign({}, options, { method: 'DELETE' })),
+        upload: (url, body, options) => request(url, Object.assign({}, options, { method: 'POST', body: body }))
     };
 
 })(window);
