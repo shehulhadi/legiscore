@@ -155,7 +155,7 @@
         });
 
         // 2. version row (storage_key filled after upload)
-        const path = Storage.buildPath(user.organization_id, matterId, docId, verId, file.name);
+        const path = FileStore.buildPath(user.organization_id, matterId, docId, verId, file.name);
         try {
           await SB.rest('/lc_document_versions', {
             method: 'POST',
@@ -178,7 +178,7 @@
 
         // 3. upload file
         try {
-          await Storage.upload(path, file);
+          await FileStore.upload(path, file);
         } catch (ex) {
           await SB.rest('/lc_document_versions', { method: 'DELETE', query: { id: 'eq.' + verId } }).catch(function(){});
           await SB.rest('/lc_documents', { method: 'DELETE', query: { id: 'eq.' + docId } }).catch(function(){});

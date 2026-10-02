@@ -71,7 +71,7 @@
     return String(p).split('/').map(encodeURIComponent).join('/');
   }
 
-  window.Storage = {
+  window.FileStore = {
     BUCKET: BUCKET,
     buildPath: buildPath,
     upload: upload,
