@@ -128,3 +128,13 @@
 .staff-main { display: flex; flex-direction: column; flex: 1; min-width: 0; }
 .staff-name { font-weight: 600; color: #12284b; font-size: 15px; display: block; }
 .staff-sub { color: #667; font-size: 13px; display: block; }
+
+/* ===== Document preview + chips ===== */
+.preview { background: #fff; border: 1px solid #e2e6ee; border-radius: 12px; margin-bottom: 16px; overflow: hidden; min-height: 200px; display: flex; align-items: center; justify-content: center; }
+.preview iframe { width: 100%; height: 60vh; min-height: 400px; border: 0; }
+.preview img { max-width: 100%; max-height: 60vh; display: block; }
+.chip { display: inline-block; padding: 2px 8px; background: #eef3ff; color: #2f6bff; border-radius: 999px; font-size: 12px; font-weight: 600; }
+.chip.small { font-size: 11px; padding: 1px 6px; }
+.share-box { margin-bottom: 16px; }
+.form-select { width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid #cfd6e4; border-radius: 10px; font-size: 16px; background: #fff; font-family: inherit; }
+.hint { font-size: 13px; color: #667; margin: 6px 0 10px; }
