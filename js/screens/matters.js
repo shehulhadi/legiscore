@@ -239,6 +239,12 @@
     html += '' +
       '<section class="panel">' +
         '<h2>Documents</h2>' +
+        '<div class="chips" id="docChips">' +
+          '<a class="chip-btn" data-filter="folder" data-value="">All</a>' +
+          '<a class="chip-btn" data-filter="folder" data-value="__labels__">Folders</a>' +
+          '<a class="chip-btn" data-filter="archived" data-value="active">Active</a>' +
+          '<a class="chip-btn" data-filter="archived" data-value="archived">Archived</a>' +
+        '</div>' +
         '<div id="docsBox" class="muted">Loading\u2026</div>' +
       '</section>' +
       '<section class="panel">' +
@@ -250,32 +256,80 @@
     return {
       html: html,
       mount: function (el) {
-        // Load documents list (works for admin and staff)
-        (async function () {
+        // Load documents list with filters
+        (function () {
           const box = el.querySelector('#docsBox');
-          if (!box) return;
-          try {
-            const rows = await SB.rest('/lc_documents', {
-              query: { matter_id: 'eq.' + id, archived: 'eq.false', select: 'id,name,file_size,mime_type,created_at', order: 'created_at.desc' },
+          const chipsEl = el.querySelector('#docChips');
+          if (!box || !chipsEl) return;
+          let folderFilter = '';
+          let archivedFilter = 'active';
+          let folderLabels = [];
+
+          async function loadLabels() {
+            try {
+              const rows = await SB.rest('/lc_folder_labels', {
+                query: { select: 'id,name,sort_order', order: 'sort_order.asc' },
+              });
+              folderLabels = rows || [];
+            } catch (e) { folderLabels = []; }
+
+            // Rebuild the chips row: All + each folder label + Active/Archived
+            let html = '<a class="chip-btn' + (folderFilter === '' && archivedFilter === 'active' ? ' active' : '') + '" data-filter="folder" data-value="">All</a>';
+            folderLabels.forEach(function (f) {
+              html += '<a class="chip-btn' + (folderFilter === f.id ? ' active' : '') + '" data-filter="folder" data-value="' + f.id + '">' + f.name + '</a>';
             });
-            if (!rows || !rows.length) {
-              box.innerHTML = '<div class="empty">No documents yet. Tap "Add document" above.</div>';
-              return;
-            }
-            box.className = '';
-            box.innerHTML = '<div class="list">' + rows.map(function (r) {
-              const size = r.file_size ? (r.file_size < 1024*1024 ? Math.round(r.file_size/1024) + ' KB' : (r.file_size/(1024*1024)).toFixed(1) + ' MB') : '';
-              return '<a class="list-row" href="#/documents/' + r.id + '">' +
-                '<div class="list-main">' +
-                  '<div class="list-title">' + esc(r.name) + '</div>' +
-                  '<div class="list-sub">' + size + ' \u00B7 ' + (r.created_at ? r.created_at.slice(0,10) : '') + '</div>' +
-                '</div>' +
-                '<div class="chev">\u203A</div>' +
-              '</a>';
-            }).join('') + '</div>';
-          } catch (ex) {
-            box.innerHTML = '<div class="muted">Could not load documents.</div>';
+            html += '<a class="chip-btn' + (archivedFilter === 'active' ? ' active' : '') + '" data-filter="archived" data-value="active">Active</a>';
+            html += '<a class="chip-btn' + (archivedFilter === 'archived' ? ' active' : '') + '" data-filter="archived" data-value="archived">Archived</a>';
+            chipsEl.innerHTML = html;
+
+            chipsEl.querySelectorAll('.chip-btn').forEach(function (btn) {
+              btn.addEventListener('click', function () {
+                const kind = btn.getAttribute('data-filter');
+                const val = btn.getAttribute('data-value');
+                if (kind === 'folder') folderFilter = val;
+                if (kind === 'archived') archivedFilter = val;
+                render();
+                loadLabels();
+              });
+            });
           }
+
+          async function render() {
+            box.innerHTML = '<div class="loading">Loading\u2026</div>';
+            try {
+              const query = {
+                matter_id: 'eq.' + id,
+                select: 'id,name,file_size,mime_type,created_at,folder_label_id,archived',
+                order: 'created_at.desc',
+              };
+              if (archivedFilter === 'active') query.archived = 'eq.false';
+              else if (archivedFilter === 'archived') query.archived = 'eq.true';
+              if (folderFilter) query.folder_label_id = 'eq.' + folderFilter;
+
+              const rows = await SB.rest('/lc_documents', { query: query });
+              if (!rows || !rows.length) {
+                box.innerHTML = '<div class="empty">No documents match this filter.</div>';
+                return;
+              }
+              box.className = '';
+              box.innerHTML = '<div class="list">' + rows.map(function (r) {
+                const size = r.file_size ? (r.file_size < 1024*1024 ? Math.round(r.file_size/1024) + ' KB' : (r.file_size/(1024*1024)).toFixed(1) + ' MB') : '';
+                const archChip = r.archived ? ' <span class="chip small">Archived</span>' : '';
+                return '<a class="list-row" href="#/documents/' + r.id + '">' +
+                  '<div class="list-main">' +
+                    '<div class="list-title">' + esc(r.name) + archChip + '</div>' +
+                    '<div class="list-sub">' + size + (r.created_at ? ' \u00B7 ' + r.created_at.slice(0,10) : '') + '</div>' +
+                  '</div>' +
+                  '<div class="chev">\u203A</div>' +
+                '</a>';
+              }).join('') + '</div>';
+            } catch (ex) {
+              box.innerHTML = '<div class="muted">Could not load documents.</div>';
+            }
+          }
+
+          loadLabels();
+          render();
         })();
 
         if (!isAdmin) return;

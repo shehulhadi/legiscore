@@ -450,3 +450,25 @@ textarea { min-height: 88px; resize: vertical; line-height: 1.5; }
   .page-title { font-size: 26px; }
   .search-panel { top: 70px; }
 }
+
+/* ===== Folder / archive filter chips ===== */
+.chips {
+  display: flex; gap: 8px; overflow-x: auto;
+  padding: 4px 0 12px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.chips::-webkit-scrollbar { display: none; }
+.chip-btn {
+  display: inline-flex; align-items: center;
+  padding: 6px 14px; min-height: 34px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 13px; font-weight: 600;
+  cursor: pointer; white-space: nowrap;
+  transition: background .12s ease, color .12s ease, border-color .12s ease;
+}
+.chip-btn:hover { background: var(--bg-2); }
+.chip-btn.active { background: var(--blue); border-color: var(--blue); color: #fff; }
