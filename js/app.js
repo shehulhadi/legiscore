@@ -2,6 +2,11 @@
  * LegisCore — app.js
  * Bootstrap: auth guard, load user profile, mount layout, register routes, start router.
  * Exposes window.LegisCoreApp.
+ *
+ * Page views (dashboard, documents, matters, ...) are intentionally
+ * stubbed here. They get replaced one-by-one by real page modules in a
+ * follow-up plan. The shell this file builds is the one everything else
+ * plugs into.
  */
 
 (function(window) {
@@ -26,6 +31,9 @@
     const LOGIN_URL = 'login.html';
 
     function redirectToLogin() {
+        // Clear any stale session before bouncing. Otherwise login.html
+        // sees a leftover token and bounces us right back to index.html,
+        // producing an infinite loop when the token is invalid.
         try {
             const keys = (config && config.STORAGE_KEYS) || {};
             localStorage.removeItem(keys.TOKEN || 'legiscore_auth_token');
@@ -53,6 +61,8 @@
     }
 
     function registerRoutes() {
+        // Both roles can access the dashboard, documents, matters, clients,
+        // and physical files. Only administrators see settings.
         const BOTH = ['secretary', 'administrator'];
         const ADMIN_ONLY = ['administrator'];
 
@@ -107,115 +117,98 @@
         router.register('clients', {
             title: 'Clients',
             allowedRoles: BOTH,
-            render: function(container) {
-                if (window.LegisCoreClients && typeof window.LegisCoreClients.render === 'function') {
-                    window.LegisCoreClients.render(container);
-                } else {
-                    placeholder('Clients', 'Clients module failed to load.')(container);
-                }
-            },
+            render: placeholder('Clients', 'Client directory and per-client documents.'),
         });
 
         router.register('physical-files', {
             title: 'Physical Files',
             allowedRoles: BOTH,
-            render: function(container) {
-                if (window.LegisCorePhysicalFiles && typeof window.LegisCorePhysicalFiles.render === 'function') {
-                    window.LegisCorePhysicalFiles.render(container);
-                } else {
-                    placeholder('Physical Files', 'Physical file tracking module failed to load.')(container);
-                }
-            },
+            render: placeholder('Physical Files', 'Cabinet, shelf, and folder tracking.'),
         });
 
         router.register('settings', {
             title: 'Settings',
             allowedRoles: ADMIN_ONLY,
-            render: function(container) {
-                if (window.LegisCoreSettings && typeof window.LegisCoreSettings.render === 'function') {
-                    window.LegisCoreSettings.render(container);
-                } else {
-                    placeholder('Settings', 'Settings module failed to load.')(container);
-                }
-            },
+            render: placeholder('Settings', 'Staff, permissions, document types.'),
         });
     }
 
-    async function init() {
+    async function loadUserProfile() {
+        // Pull the lc_users row that matches the signed-in auth user.
+        // authApi.getCurrentUser returns the auth user (id, email, ...).
+        // We then fetch the profile row by id.
+        const authUser = await authApi.getCurrentUser();
+        if (!authUser || !authUser.id) {
+            throw new Error('No auth user returned');
+        }
+
+        const rows = await api.rest(
+            '/lc_users?id=eq.' + encodeURIComponent(authUser.id) + '&select=*'
+        );
+
+        if (!Array.isArray(rows) || rows.length === 0) {
+            throw new Error(
+                'Your account is not linked to a LegisCore profile. ' +
+                'Ask an administrator to add you.'
+            );
+        }
+
+        const profile = rows[0];
+
+        if (profile.active === false) {
+            throw new Error('Your account has been deactivated.');
+        }
+
+        state.set('user', profile);
+        state.set('orgId', profile.organization_id || null);
+        return profile;
+    }
+
+    function showBootError(message) {
+        const root = document.getElementById('app');
+        if (root) {
+            root.innerHTML =
+                '<div style="padding:24px">' +
+                    '<div class="alert alert-error">' + message + '</div>' +
+                    '<a href="' + LOGIN_URL + '" class="btn btn-secondary">Back to sign in</a>' +
+                '</div>';
+        }
+    }
+
+    async function boot() {
         if (!authApi.isAuthenticated()) {
             redirectToLogin();
             return;
         }
 
-        let sessionUser = null;
         try {
-            sessionUser = await authApi.getCurrentUser();
+            await loadUserProfile();
         } catch (err) {
-            console.error('Failed to get current auth user:', err);
-        }
-
-        if (!sessionUser || !sessionUser.id) {
-            redirectToLogin();
-            return;
-        }
-
-        let profile = null;
-        try {
-            const res = await api.rest('lc_users?select=*&auth_user_id=eq.' + encodeURIComponent(sessionUser.id) + '&limit=1');
-            if (Array.isArray(res) && res.length > 0) {
-                profile = res[0];
-            }
-        } catch (err) {
-            console.error('Failed to load profile from lc_users:', err);
-        }
-
-        if (!profile) {
-            profile = {
-                id: sessionUser.id,
-                auth_user_id: sessionUser.id,
-                email: sessionUser.email,
-                full_name: (sessionUser.user_metadata && sessionUser.user_metadata.full_name) || sessionUser.email,
-                role: 'secretary',
-                is_active: true
-            };
-        }
-
-        if (profile.is_active === false) {
-            alert('Your account has been deactivated. Please contact the administrator.');
-            redirectToLogin();
-            return;
-        }
-
-        state.set('user', profile);
-
-        const appContainer = document.getElementById('app');
-        if (!appContainer) {
-            console.error('Root #app container not found in DOM.');
-            return;
-        }
-
-        layout.mount(appContainer, {
-            user: profile,
-            onLogout: async function() {
-                try {
-                    await authApi.logout();
-                } catch (_) {}
+            console.error('[LegisCoreApp] boot failed:', err);
+            if (err.status === 401 || err.status === 403) {
                 redirectToLogin();
+                return;
             }
-        });
+            showBootError(err.message || 'Could not load your profile.');
+            return;
+        }
 
+        layout.mount();
         registerRoutes();
         router.start();
     }
 
-    window.LegisCoreApp = {
-        init: init
-    };
+    // authApi emits legiscore:unauthorized on 401 from anywhere.
+    window.addEventListener('legiscore:unauthorized', function() {
+        redirectToLogin();
+    });
 
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
+        document.addEventListener('DOMContentLoaded', boot);
     } else {
-        init();
+        boot();
     }
+
+    window.LegisCoreApp = { boot };
 
 })(window);
