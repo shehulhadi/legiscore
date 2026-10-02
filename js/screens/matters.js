@@ -239,7 +239,7 @@
     html += '' +
       '<section class="panel">' +
         '<h2>Documents</h2>' +
-        '<div class="empty">No documents yet. Tap "Add document" above.</div>' +
+        '<div id="docsBox" class="muted">Loading\u2026</div>' +
       '</section>' +
       '<section class="panel">' +
         '<h2>Who can see this</h2>' +
@@ -250,6 +250,34 @@
     return {
       html: html,
       mount: function (el) {
+        // Load documents list (works for admin and staff)
+        (async function () {
+          const box = el.querySelector('#docsBox');
+          if (!box) return;
+          try {
+            const rows = await SB.rest('/lc_documents', {
+              query: { matter_id: 'eq.' + id, archived: 'eq.false', select: 'id,name,file_size,mime_type,created_at', order: 'created_at.desc' },
+            });
+            if (!rows || !rows.length) {
+              box.innerHTML = '<div class="empty">No documents yet. Tap "Add document" above.</div>';
+              return;
+            }
+            box.className = '';
+            box.innerHTML = '<div class="list">' + rows.map(function (r) {
+              const size = r.file_size ? (r.file_size < 1024*1024 ? Math.round(r.file_size/1024) + ' KB' : (r.file_size/(1024*1024)).toFixed(1) + ' MB') : '';
+              return '<a class="list-row" href="#/documents/' + r.id + '">' +
+                '<div class="list-main">' +
+                  '<div class="list-title">' + esc(r.name) + '</div>' +
+                  '<div class="list-sub">' + size + ' \u00B7 ' + (r.created_at ? r.created_at.slice(0,10) : '') + '</div>' +
+                '</div>' +
+                '<div class="chev">\u203A</div>' +
+              '</a>';
+            }).join('') + '</div>';
+          } catch (ex) {
+            box.innerHTML = '<div class="muted">Could not load documents.</div>';
+          }
+        })();
+
         if (!isAdmin) return;
         const listEl = el.querySelector('#staffList');
         if (!listEl) return;
