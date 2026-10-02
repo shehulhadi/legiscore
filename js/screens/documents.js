@@ -358,8 +358,40 @@
           if (!rows.length) { vb.innerHTML = '<div class="muted">No versions yet.</div>'; return; }
           vb.innerHTML = '<div class="list">' + rows.map(function (r) {
             const isCur = r.id === d.current_version_id;
-            return '<div class="list-row"><div class="list-main"><div class="list-title">Version ' + r.version_no + (isCur ? ' <span class="chip small">Current</span>' : '') + '</div><div class="list-sub">' + esc(r.original_name) + ' \u00B7 ' + H.humanSize(r.file_size) + ' \u00B7 ' + H.fmtDate(r.uploaded_at) + '</div></div></div>';
+            const noteHtml = r.note ? '<div class="list-sub">' + esc(r.note) + '</div>' : '';
+            return '<a class="list-row version-row" href="javascript:void(0)" data-ver-id="' + esc(r.id) + '">' +
+              '<div class="list-main">' +
+                '<div class="list-title">Version ' + r.version_no + (isCur ? ' <span class="chip small">Current</span>' : '') + '</div>' +
+                '<div class="list-sub">' + esc(r.original_name) + ' \u00B7 ' + H.humanSize(r.file_size) + ' \u00B7 ' + H.fmtDate(r.uploaded_at) + '</div>' +
+                noteHtml +
+              '</div>' +
+              '<div class="chev">\u203A</div>' +
+            '</a>';
           }).join('') + '</div>';
+
+          vb.querySelectorAll('.version-row').forEach(function (row) {
+            row.addEventListener('click', async function () {
+              const verId = row.getAttribute('data-ver-id');
+              const v = rows.find(function (x) { return x.id === verId; });
+              if (!v) return;
+              vb.querySelectorAll('.version-row').forEach(function (x) { x.classList.remove('selected'); });
+              row.classList.add('selected');
+              previewBox.innerHTML = '<div class="loading">Loading\u2026</div>';
+              revokeBlob();
+              try {
+                const blob = await FileStore.download(v.storage_key);
+                currentBlobUrl = URL.createObjectURL(blob);
+                const vmime = v.mime_type || '';
+                const vIsPdf = vmime.indexOf('pdf') !== -1;
+                const vIsImg = vmime.indexOf('image') !== -1;
+                if (vIsPdf) previewBox.innerHTML = '<iframe src="' + currentBlobUrl + '" title="Preview"></iframe>';
+                else if (vIsImg) previewBox.innerHTML = '<img alt="Preview" src="' + currentBlobUrl + '">';
+                else previewBox.innerHTML = '<div class="empty">Preview not available for this file type.</div>';
+              } catch (ex) {
+                previewBox.innerHTML = '<div class="empty">Could not load. ' + esc(ex.message || '') + '</div>';
+              }
+            });
+          });
         })();
 
         // Activity
@@ -380,12 +412,32 @@
 
         // Add new version
         el.querySelector('#newVerBtn').addEventListener('click', async function () {
-          const picker = document.createElement('input');
-          picker.type = 'file';
-          picker.accept = '.pdf,.doc,.docx,.jpg,.jpeg,.png,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png';
-          picker.addEventListener('change', async function () {
-            const file = picker.files && picker.files[0];
-            if (!file) return;
+          if (el.querySelector('#newVerPanel')) return;
+          const panel = document.createElement('div');
+          panel.className = 'panel';
+          panel.id = 'newVerPanel';
+          panel.innerHTML =
+            '<h2>Add new version</h2>' +
+            '<div class="hint">The old file is kept. Choose the new file and say what changed.</div>' +
+            '<label for="nv_file">New file</label>' +
+            '<input id="nv_file" type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png">' +
+            '<label for="nv_note">What changed? (optional)</label>' +
+            '<input id="nv_note" type="text" placeholder="e.g. Signed copy, corrected page 3">' +
+            '<div id="nvErr" class="err" hidden></div>' +
+            '<div class="form-actions">' +
+              '<button class="btn primary" id="nvGo" type="button">Add new version</button>' +
+              '<button class="btn" id="nvCancel" type="button">Cancel</button>' +
+            '</div>';
+          el.insertBefore(panel, el.querySelector('.actions'));
+          panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+          const err = panel.querySelector('#nvErr');
+          panel.querySelector('#nvCancel').addEventListener('click', function () { panel.remove(); });
+          panel.querySelector('#nvGo').addEventListener('click', async function () {
+            const file = panel.querySelector('#nv_file').files[0];
+            const note = panel.querySelector('#nv_note').value.trim() || null;
+            err.hidden = true;
+            if (!file) { err.textContent = 'Choose a file.'; err.hidden = false; return; }
             try {
               const ext = H.extOf(file.name);
               if (H.ALLOWED_EXT.indexOf(ext) === -1) throw new Error('Only PDF, Word, JPG, or PNG files can be added.');
@@ -410,6 +462,7 @@
                   mime_type: mime,
                   file_size: file.size,
                   uploaded_by: user.id,
+                  note: note,
                 },
                 headers: { Prefer: 'return=representation' },
               });
@@ -431,10 +484,10 @@
               await logActivity('added a new version of', d.name, d.id);
               shell.render();
             } catch (ex) {
-              showErr(ex.message || 'Could not add version.');
+              err.textContent = ex.message || 'Could not add version.';
+              err.hidden = false;
             }
           });
-          picker.click();
         });
 
         // Download

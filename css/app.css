@@ -138,3 +138,8 @@
 .share-box { margin-bottom: 16px; }
 .form-select { width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid #cfd6e4; border-radius: 10px; font-size: 16px; background: #fff; font-family: inherit; }
 .hint { font-size: 13px; color: #667; margin: 6px 0 10px; }
+
+/* ===== Version rows ===== */
+.version-row { cursor: pointer; }
+.version-row.selected { background: #eef3ff; }
+.version-row .chev { color: #2f6bff; }
