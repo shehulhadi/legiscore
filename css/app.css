@@ -76,3 +76,39 @@
   .bottom-nav { display: none; }
   .screen { grid-column: 2; grid-row: 2; padding: 24px 32px; }
 }
+
+/* ===== Lists ===== */
+.list { display: flex; flex-direction: column; }
+.list-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 4px; min-height: 56px;
+  border-bottom: 1px solid #eef1f7;
+  text-decoration: none; color: inherit;
+}
+.list-row:last-child { border-bottom: 0; }
+.list-row:active { background: #f4f6fa; }
+.list-main { flex: 1; min-width: 0; }
+.list-title { font-weight: 600; color: #12284b; font-size: 15px; }
+.list-sub { color: #667; font-size: 13px; margin-top: 2px; }
+.chev { color: #aab; font-size: 20px; }
+
+/* ===== Forms ===== */
+.form label { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 6px; color: #334; }
+.form input, .form select, .form textarea {
+  width: 100%; min-height: 44px; padding: 10px 12px;
+  border: 1px solid #cfd6e4; border-radius: 10px;
+  font-size: 16px; background: #fff; color: #1a2330;
+  font-family: inherit;
+}
+.form textarea { min-height: 80px; resize: vertical; }
+.form input:focus, .form select:focus, .form textarea:focus {
+  outline: 2px solid #2f6bff; outline-offset: 1px; border-color: #2f6bff;
+}
+.form-actions { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+
+/* ===== Misc ===== */
+.crumbs { font-size: 13px; color: #667; margin-bottom: 8px; }
+.crumbs a { color: #2f6bff; text-decoration: none; }
+.kv { display: grid; grid-template-columns: 100px 1fr; gap: 8px 12px; margin: 0; }
+.kv dt { color: #667; font-size: 14px; }
+.kv dd { margin: 0; color: #1a2330; font-size: 15px; }
