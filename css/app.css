@@ -112,3 +112,19 @@
 .kv { display: grid; grid-template-columns: 100px 1fr; gap: 8px 12px; margin: 0; }
 .kv dt { color: #667; font-size: 14px; }
 .kv dd { margin: 0; color: #1a2330; font-size: 15px; }
+
+/* ===== Inline link ===== */
+.inline-link { color: #2f6bff; text-decoration: none; font-weight: 600; }
+
+/* ===== Staff assignment ===== */
+.staff-list { display: flex; flex-direction: column; }
+.staff-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 4px; min-height: 52px;
+  border-bottom: 1px solid #eef1f7; cursor: pointer;
+}
+.staff-row:last-child { border-bottom: 0; }
+.staff-row input[type="checkbox"] { width: 22px; height: 22px; flex: none; }
+.staff-main { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.staff-name { font-weight: 600; color: #12284b; font-size: 15px; display: block; }
+.staff-sub { color: #667; font-size: 13px; display: block; }

@@ -88,5 +88,11 @@
     screenEl: screenEl,
     escapeHtml: escapeHtml,
   };
-  render();
+
+  // Render only after every screen module has had a chance to register its routes.
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', render);
+  } else {
+    render();
+  }
 })(window);
