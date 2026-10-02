@@ -74,6 +74,8 @@
       '<form id="docForm" class="panel form">' +
         '<label for="f_name">Document name</label>' +
         '<input id="f_name" name="name" type="text" required placeholder="e.g. Tenancy agreement 2026">' +
+        '<label for="f_desc">Description (optional)</label>' +
+        '<input id="f_desc" name="description" type="text" placeholder="e.g. Signed original, 3 pages">' +
         '<label for="f_folder">Folder</label>' +
         '<select id="f_folder" name="folder_label_id">' + labelOpts + '</select>' +
         '<label for="f_file">File</label>' +
@@ -110,6 +112,7 @@
       const fd = new FormData(form);
       const name = String(fd.get('name') || '').trim();
       const folderId = String(fd.get('folder_label_id') || '').trim() || null;
+      const description = String(fd.get('description') || '').trim() || null;
       const file = fd.get('file');
       const user = Auth.currentUser();
 
@@ -141,6 +144,8 @@
             organization_id: user.organization_id,
             matter_id: matterId,
             name: name,
+            description: description,
+            search_terms: [name, description].filter(Boolean).join(' '),
             folder_label_id: folderId,
             document_type: null,
             storage_key: null,
@@ -474,10 +479,16 @@
                 throw new Error('Could not upload the file: ' + (ex.message || 'unknown'));
               }
 
+              const curRows = await SB.rest('/lc_documents', {
+                query: { id: 'eq.' + d.id, select: 'search_terms' },
+              });
+              const curTerms = (curRows && curRows[0] && curRows[0].search_terms) || '';
+              const newTerms = (curTerms + ' ' + (note || '')).trim();
+
               await SB.rest('/lc_documents', {
                 method: 'PATCH',
                 query: { id: 'eq.' + d.id },
-                body: { current_version_id: verId, storage_key: path, mime_type: mime, file_size: file.size },
+                body: { current_version_id: verId, storage_key: path, mime_type: mime, file_size: file.size, search_terms: newTerms },
                 headers: { Prefer: 'return=representation' },
               });
 

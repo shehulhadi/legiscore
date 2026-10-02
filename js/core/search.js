@@ -44,7 +44,7 @@
           query: { select: 'id,title,matter_number,lc_clients(name)', or: '(title.ilike.*' + q + '*,matter_number.ilike.*' + q + '*)', order: 'updated_at.desc', limit: '5' },
         }),
         SB.rest('/lc_documents', {
-          query: { select: 'id,name,mime_type,lc_matters(id,title)', name: 'ilike.*' + q + '*', order: 'created_at.desc', limit: '5' },
+          query: { select: 'id,name,mime_type,lc_matters(id,title)', or: '(name.ilike.*' + q + '*,description.ilike.*' + q + '*,search_terms.ilike.*' + q + '*)', order: 'created_at.desc', limit: '5' },
         }),
       ]);
       if (myReq !== reqId) return;
