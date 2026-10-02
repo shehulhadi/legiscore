@@ -37,13 +37,30 @@
     const session = await SB.auth('/token?grant_type=password', {
       body: { email: email, password: password },
     });
-    // Fetch profile row (RLS: user can read their own org's rows)
-    const rows = await SB.rest('/lc_users', {
-      query: { id: 'eq.' + session.user.id, select: '*' },
-    });
-    const profile = rows && rows[0] ? rows[0] : null;
-    if (!profile) throw new Error('No profile found for this account.');
-    if (profile.active === false) throw new Error('Your account is not active.');
+
+    // Save the token FIRST so the next request carries the Authorization header.
+    localStorage.setItem(CFG.STORAGE_KEYS.TOKEN, session.access_token);
+    localStorage.setItem(CFG.STORAGE_KEYS.REFRESH_TOKEN, session.refresh_token || '');
+
+    let profile;
+    try {
+      const rows = await SB.rest('/lc_users', {
+        query: { id: 'eq.' + session.user.id, select: '*' },
+      });
+      profile = rows && rows[0] ? rows[0] : null;
+    } catch (e) {
+      clearSession();
+      throw new Error('Could not load your profile. ' + (e.message || ''));
+    }
+
+    if (!profile) {
+      clearSession();
+      throw new Error('No profile found for this account.');
+    }
+    if (profile.active === false) {
+      clearSession();
+      throw new Error('Your account is not active.');
+    }
 
     const user = {
       id: session.user.id,
