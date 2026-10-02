@@ -281,6 +281,7 @@
         '<button class="btn primary" id="dlBtn" type="button">Download</button>' +
         (canPrint ? '<button class="btn" id="prBtn" type="button">Print</button>' : '') +
         '<button class="btn" id="shBtn" type="button">Share</button>' +
+        '<button class="btn" id="newVerBtn" type="button">Add new version</button>' +
         (Auth.isAdmin() ? '<button class="btn" id="arBtn" type="button">' + (isArchived ? 'Unarchive' : 'Archive') + '</button>' : '') +
       '</div>' +
       '<div id="actErr" class="err" hidden></div>' +
@@ -376,6 +377,65 @@
             ab.innerHTML = '<div class="muted">Could not load activity.</div>';
           }
         })();
+
+        // Add new version
+        el.querySelector('#newVerBtn').addEventListener('click', async function () {
+          const picker = document.createElement('input');
+          picker.type = 'file';
+          picker.accept = '.pdf,.doc,.docx,.jpg,.jpeg,.png,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png';
+          picker.addEventListener('change', async function () {
+            const file = picker.files && picker.files[0];
+            if (!file) return;
+            try {
+              const ext = H.extOf(file.name);
+              if (H.ALLOWED_EXT.indexOf(ext) === -1) throw new Error('Only PDF, Word, JPG, or PNG files can be added.');
+              if (file.size > H.MAX_BYTES) throw new Error('File is larger than 20 MB.');
+              const okSig = await H.sniffOk(file, ext);
+              if (!okSig) throw new Error('This file does not look like a real ' + ext.toUpperCase() + ' file.');
+
+              const user = Auth.currentUser();
+              const nextNo = (vers || []).reduce(function (a, r) { return Math.max(a, r.version_no || 0); }, 0) + 1;
+              const verId = H.newId('v');
+              const mime = H.MIME_BY_EXT[ext] || file.type || 'application/octet-stream';
+              const path = FileStore.buildPath(user.organization_id, matter.id, d.id, verId, file.name);
+
+              await SB.rest('/lc_document_versions', {
+                method: 'POST',
+                body: {
+                  id: verId,
+                  document_id: d.id,
+                  version_no: nextNo,
+                  storage_key: path,
+                  original_name: file.name,
+                  mime_type: mime,
+                  file_size: file.size,
+                  uploaded_by: user.id,
+                },
+                headers: { Prefer: 'return=representation' },
+              });
+
+              try {
+                await FileStore.upload(path, file);
+              } catch (ex) {
+                await SB.rest('/lc_document_versions', { method: 'DELETE', query: { id: 'eq.' + verId } }).catch(function(){});
+                throw new Error('Could not upload the file: ' + (ex.message || 'unknown'));
+              }
+
+              await SB.rest('/lc_documents', {
+                method: 'PATCH',
+                query: { id: 'eq.' + d.id },
+                body: { current_version_id: verId, storage_key: path, mime_type: mime, file_size: file.size },
+                headers: { Prefer: 'return=representation' },
+              });
+
+              await logActivity('added a new version of', d.name, d.id);
+              shell.render();
+            } catch (ex) {
+              showErr(ex.message || 'Could not add version.');
+            }
+          });
+          picker.click();
+        });
 
         // Download
         el.querySelector('#dlBtn').addEventListener('click', async function () {
