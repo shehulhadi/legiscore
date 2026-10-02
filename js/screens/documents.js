@@ -87,7 +87,7 @@
       '</form>';
   }
 
-  window.__LegisDocsHelpers = { newId: newId, extOf: extOf, sniffOk: sniffOk, humanSize: humanSize, fmtDate: fmtDate, MAX_BYTES: MAX_BYTES, ALLOWED_EXT: ALLOWED_EXT, MIME_BY_EXT: MIME_BY_EXT };
+  window.__LegisDocsHelpers = { formHtml: formHtml, newId: newId, extOf: extOf, sniffOk: sniffOk, humanSize: humanSize, fmtDate: fmtDate, MAX_BYTES: MAX_BYTES, ALLOWED_EXT: ALLOWED_EXT, MIME_BY_EXT: MIME_BY_EXT };
 })(window);
 
 (function (window) {
