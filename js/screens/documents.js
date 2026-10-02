@@ -198,6 +198,7 @@
           headers: { Prefer: 'return=representation' },
         });
 
+        window.Audit && Audit.log('document.added', 'document', docId, { name: name, size: file.size, mime: mime });
         window.location.hash = '#/documents/' + docId;
       } catch (ex) {
         err.textContent = ex.message || 'Could not add the document.';
@@ -322,6 +323,7 @@
         }
 
         await logActivity('opened', d.name, d.id);
+        window.Audit && Audit.log('document.opened', 'document', d.id, { name: d.name });
 
         // Who can see this
         (async function () {
@@ -493,6 +495,7 @@
               });
 
               await logActivity('added a new version of', d.name, d.id);
+              window.Audit && Audit.log('document.version_added', 'document', d.id, { name: d.name, version: nextNo, note: note || null });
               shell.render();
             } catch (ex) {
               err.textContent = ex.message || 'Could not add version.';
@@ -511,6 +514,7 @@
             document.body.appendChild(a); a.click(); a.remove();
             setTimeout(function () { URL.revokeObjectURL(a.href); }, 5000);
             await logActivity('downloaded', d.name, d.id);
+            window.Audit && Audit.log('document.downloaded', 'document', d.id, { name: d.name });
           } catch (ex) { showErr(ex.message || 'Could not download.'); }
         });
 
@@ -521,6 +525,7 @@
           if (!w) { showErr('Allow pop-ups to print.'); return; }
           setTimeout(function () { try { w.focus(); w.print(); } catch (e) {} }, 800);
           logActivity('printed', d.name, d.id);
+          window.Audit && Audit.log('document.printed', 'document', d.id, { name: d.name });
         });
 
         // Archive / unarchive
@@ -536,6 +541,7 @@
               headers: { Prefer: 'return=representation' },
             });
             await logActivity(next ? 'archived' : 'unarchived', d.name, d.id);
+            window.Audit && Audit.log(next ? 'document.archived' : 'document.unarchived', 'document', d.id, { name: d.name });
             shell.render();
           } catch (ex) { arBtn.disabled = false; showErr(ex.message || 'Could not update.'); }
         });
@@ -584,6 +590,7 @@
                 headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
               });
               await logActivity('shared', d.name, d.id);
+              window.Audit && Audit.log('document.shared', 'document', d.id, { name: d.name, shared_with: uid });
               msg.textContent = 'Shared.';
               shareBox.remove();
               shell.render();
