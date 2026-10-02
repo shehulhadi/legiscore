@@ -1,0 +1,78 @@
+
+/* ===== App shell ===== */
+.app-header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 16px; background: #fff;
+  border-bottom: 1px solid #e2e6ee;
+  position: sticky; top: 0; z-index: 10;
+}
+.brand { font-weight: 700; color: #12284b; font-size: 18px; white-space: nowrap; }
+.search {
+  flex: 1; min-height: 40px; padding: 8px 12px;
+  border: 1px solid #cfd6e4; border-radius: 10px;
+  font-size: 15px; background: #f8fafd;
+}
+.search:focus { outline: 2px solid #2f6bff; outline-offset: 1px; background: #fff; }
+.user-area { display: flex; align-items: center; gap: 12px; white-space: nowrap; }
+.user-name { color: #556; font-size: 14px; }
+.link-btn {
+  background: none; border: 0; color: #2f6bff;
+  font-size: 14px; cursor: pointer; padding: 6px 4px; min-height: 36px;
+}
+
+.side-nav { display: none; }
+.bottom-nav {
+  display: flex; position: fixed; bottom: 0; left: 0; right: 0;
+  background: #fff; border-top: 1px solid #e2e6ee;
+  padding: 4px 0 calc(4px + env(safe-area-inset-bottom));
+  z-index: 10;
+}
+.bottom-nav a {
+  flex: 1; text-align: center; padding: 10px 4px;
+  color: #667; text-decoration: none; font-size: 12px;
+  min-height: 44px; display: flex; align-items: center; justify-content: center;
+}
+.bottom-nav a.active, .bottom-nav a:hover { color: #2f6bff; }
+
+.screen { padding: 20px 16px 96px; max-width: 1000px; margin: 0 auto; }
+.page-title { font-size: 22px; margin: 0 0 4px; color: #12284b; }
+.page-sub { color: #667; margin: 0 0 20px; font-size: 14px; }
+
+.actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 44px; padding: 0 18px;
+  background: #fff; color: #12284b;
+  border: 1px solid #cfd6e4; border-radius: 10px;
+  font-size: 15px; font-weight: 600; text-decoration: none; cursor: pointer;
+}
+.btn.primary { background: #2f6bff; color: #fff; border-color: #2f6bff; }
+.btn.primary:hover { background: #2255dd; }
+
+.panel {
+  background: #fff; border: 1px solid #e2e6ee;
+  border-radius: 12px; padding: 16px; margin-bottom: 16px;
+}
+.panel h2 { font-size: 16px; margin: 0 0 12px; color: #12284b; }
+.muted { color: #889; font-size: 14px; }
+.loading { color: #889; padding: 24px 0; text-align: center; }
+.empty { color: #889; padding: 24px 0; text-align: center; }
+
+/* ===== Desktop ===== */
+@media (min-width: 800px) {
+  body { display: grid; grid-template-columns: 220px 1fr; grid-template-rows: auto 1fr; }
+  .app-header { grid-column: 1 / -1; }
+  .side-nav {
+    display: flex; flex-direction: column; gap: 4px;
+    padding: 16px 10px; border-right: 1px solid #e2e6ee;
+    background: #fff; grid-row: 2;
+  }
+  .side-nav a {
+    padding: 10px 12px; border-radius: 8px; color: #334;
+    text-decoration: none; font-size: 15px; min-height: 40px;
+    display: flex; align-items: center;
+  }
+  .side-nav a.active, .side-nav a:hover { background: #eef3ff; color: #2f6bff; }
+  .bottom-nav { display: none; }
+  .screen { grid-column: 2; grid-row: 2; padding: 24px 32px; }
+}

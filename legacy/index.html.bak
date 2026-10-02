@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LegisCore</title>
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/layout.css">
+    <link rel="stylesheet" href="css/components.css">
+</head>
+<body>
+    <div id="app">
+        <div class="view-loading">
+            <div class="spinner"></div>
+            <p>Loading LegisCore&hellip;</p>
+        </div>
+    </div>
+
+    <!-- Load order matters: config -> api -> auth-api -> state -> router -> layout -> app -->
+    <script src="js/config.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/api/auth-api.js"></script>
+    <script src="js/state.js"></script>
+    <script src="js/api/documents-api.js"></script>
+    <script src="js/api/matters-api.js"></script>
+    <script src="js/api/storage-api.js"></script>
+    <script src="js/router.js"></script>
+    <script src="pages/dashboard.js"></script>
+    <script src="pages/documents.js"></script>
+    <script src="pages/documents-modal.js"></script>
+    <script src="pages/matters.js"></script>
+    <script src="pages/matter-detail.js"></script>
+    <script src="js/layout.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
