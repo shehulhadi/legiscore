@@ -472,3 +472,7 @@ textarea { min-height: 88px; resize: vertical; line-height: 1.5; }
 }
 .chip-btn:hover { background: var(--bg-2); }
 .chip-btn.active { background: var(--blue); border-color: var(--blue); color: #fff; }
+
+/* Row with split link/action */
+.list-row .row-link { text-decoration: none; color: inherit; display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.list-row .chev.row-link { flex: none; display: flex; align-items: center; }

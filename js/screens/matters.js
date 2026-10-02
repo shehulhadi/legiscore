@@ -315,14 +315,38 @@
               box.innerHTML = '<div class="list">' + rows.map(function (r) {
                 const size = r.file_size ? (r.file_size < 1024*1024 ? Math.round(r.file_size/1024) + ' KB' : (r.file_size/(1024*1024)).toFixed(1) + ' MB') : '';
                 const archChip = r.archived ? ' <span class="chip small">Archived</span>' : '';
-                return '<a class="list-row" href="#/documents/' + r.id + '">' +
-                  '<div class="list-main">' +
+                const unarch = r.archived
+                  ? '<button class="link-btn" data-unarchive="' + r.id + '" type="button" style="margin-left:8px">Unarchive</button>'
+                  : '';
+                return '<div class="list-row">' +
+                  '<a class="list-main row-link" href="#/documents/' + r.id + '">' +
                     '<div class="list-title">' + esc(r.name) + archChip + '</div>' +
                     '<div class="list-sub">' + size + (r.created_at ? ' \u00B7 ' + r.created_at.slice(0,10) : '') + '</div>' +
-                  '</div>' +
-                  '<div class="chev">\u203A</div>' +
-                '</a>';
+                  '</a>' +
+                  unarch +
+                  '<a class="chev row-link" href="#/documents/' + r.id + '">\u203A</a>' +
+                '</div>';
               }).join('') + '</div>';
+
+              box.querySelectorAll('[data-unarchive]').forEach(function (btn) {
+                btn.addEventListener('click', async function (ev) {
+                  ev.preventDefault(); ev.stopPropagation();
+                  const docId = btn.getAttribute('data-unarchive');
+                  btn.disabled = true;
+                  try {
+                    await SB.rest('/lc_documents', {
+                      method: 'PATCH',
+                      query: { id: 'eq.' + docId },
+                      body: { archived: false },
+                      headers: { Prefer: 'return=minimal' },
+                    });
+                    if (window.Audit) Audit.log('document.unarchived', 'document', docId, {});
+                    render();
+                  } catch (e) {
+                    btn.disabled = false;
+                  }
+                });
+              });
             } catch (ex) {
               box.innerHTML = '<div class="muted">Could not load documents.</div>';
             }
