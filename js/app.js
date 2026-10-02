@@ -186,7 +186,7 @@
             return;
         }
 
-        state.setUser(profile);
+        state.set('user', profile);
 
         const appContainer = document.getElementById('app');
         if (!appContainer) {
@@ -205,7 +205,7 @@
         });
 
         registerRoutes();
-        router.init();
+        router.start();
     }
 
     window.LegisCoreApp = {
