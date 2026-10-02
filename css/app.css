@@ -181,3 +181,13 @@
 .filter-row { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
 .filter-row select, .filter-row input { flex: 1; min-width: 140px; min-height: 40px; padding: 8px 12px; border: 1px solid #cfd6e4; border-radius: 10px; font-size: 15px; background: #fff; font-family: inherit; }
 .list-title .chip { margin-left: 6px; }
+
+/* ===== Credentials box ===== */
+.cred-box {
+  background: #f4f6fa; border: 1px solid #e2e6ee; border-radius: 10px;
+  padding: 12px 14px; margin: 12px 0; font-size: 14px;
+}
+.cred-box code {
+  background: #fff; padding: 2px 6px; border: 1px solid #cfd6e4;
+  border-radius: 6px; font-size: 14px; letter-spacing: .02em;
+}

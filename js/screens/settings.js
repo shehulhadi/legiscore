@@ -63,6 +63,15 @@
     return { html: html, mount: function (el) { mountStaff(el); } };
   }
 
+  function genPassword() {
+    const bytes = new Uint8Array(14);
+    crypto.getRandomValues(bytes);
+    const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+    let out = '';
+    for (let i = 0; i < bytes.length; i++) out += alphabet[bytes[i] % alphabet.length];
+    return out;
+  }
+
   function mountStaff(el) {
     el.querySelector('#newStaffBtn').addEventListener('click', function () {
       if (el.querySelector('#newStaffPanel')) return;
@@ -70,7 +79,7 @@
       panel.className = 'panel'; panel.id = 'newStaffPanel';
       panel.innerHTML =
         '<h2>Add staff</h2>' +
-        '<div class="hint">First create the account in Supabase \u2192 Authentication \u2192 Users (email + password). Then enter the same email here to link them into your organization.</div>' +
+        '<div class="hint">Enter their details. A password will be generated \u2014 give it to them and ask them to change it after first sign-in.</div>' +
         '<label for="ns_name">Name</label>' +
         '<input id="ns_name" type="text" required>' +
         '<label for="ns_email">Email</label>' +
@@ -85,7 +94,7 @@
         '</select>' +
         '<div id="nsErr" class="err" hidden></div>' +
         '<div class="form-actions">' +
-          '<button class="btn primary" id="nsGo" type="button">Link account</button>' +
+          '<button class="btn primary" id="nsGo" type="button">Create account</button>' +
           '<button class="btn" id="nsCancel" type="button">Cancel</button>' +
         '</div>';
       el.insertBefore(panel, el.querySelector('.actions'));
@@ -93,23 +102,75 @@
 
       const err = panel.querySelector('#nsErr');
       panel.querySelector('#nsCancel').addEventListener('click', function () { panel.remove(); });
+
       panel.querySelector('#nsGo').addEventListener('click', async function () {
         const name = panel.querySelector('#ns_name').value.trim();
         const email = panel.querySelector('#ns_email').value.trim().toLowerCase();
         const role = panel.querySelector('#ns_role').value;
         err.hidden = true;
         if (!name || !email) { err.textContent = 'Name and email are required.'; err.hidden = false; return; }
+
+        const goBtn = panel.querySelector('#nsGo');
+        goBtn.disabled = true;
+
+        const password = genPassword();
+
+        // --- Sign the new user up without touching our admin session ---
+        let newUserId = null;
+        try {
+          const su = await SB.auth('/signup', { body: { email: email, password: password } });
+          newUserId = su && su.user && su.user.id;
+        } catch (ex) {
+          const m = (ex.message || '').toLowerCase();
+          if (m.indexOf('already') !== -1 || m.indexOf('registered') !== -1 || m.indexOf('exists') !== -1) {
+            err.textContent = 'That email already has an account. If they are not in Staff yet, link them instead.';
+          } else {
+            err.textContent = ex.message || 'Could not create the account.';
+          }
+          err.hidden = false;
+          goBtn.disabled = false;
+          return;
+        }
+
+        if (!newUserId) {
+          err.textContent = 'Account created but the ID was not returned. Check Supabase → Authentication → Users.';
+          err.hidden = false;
+          goBtn.disabled = false;
+          return;
+        }
+
+        // --- Link the profile row (this runs as our still-signed-in admin) ---
         try {
           await SB.rest('/rpc/lc_link_user', {
             method: 'POST',
             body: { p_email: email, p_name: name, p_role: role },
             headers: { 'Content-Type': 'application/json' },
           });
-          shell.render();
         } catch (ex) {
-          err.textContent = ex.message || 'Could not link account.';
+          err.textContent = 'Auth account created, but linking it failed: ' + (ex.message || 'unknown');
           err.hidden = false;
+          goBtn.disabled = false;
+          return;
         }
+
+        // --- Show the credentials once ---
+        panel.innerHTML =
+          '<h2>Account created</h2>' +
+          '<div class="hint">Give these to ' + esc(name) + '. They will change the password themselves after first sign-in.</div>' +
+          '<div class="cred-box">' +
+            '<div><strong>Email:</strong> ' + esc(email) + '</div>' +
+            '<div><strong>Temporary password:</strong> <code id="credPw">' + esc(password) + '</code></div>' +
+          '</div>' +
+          '<div class="form-actions">' +
+            '<button class="btn primary" id="copyCred" type="button">Copy</button>' +
+            '<button class="btn" id="doneBtn" type="button">Done</button>' +
+          '</div>';
+        panel.querySelector('#copyCred').addEventListener('click', function () {
+          const text = 'Email: ' + email + '\nPassword: ' + password;
+          if (navigator.clipboard) navigator.clipboard.writeText(text).then(function () { panel.querySelector('#copyCred').textContent = 'Copied'; });
+          else { panel.querySelector('#copyCred').textContent = 'Copy not available'; }
+        });
+        panel.querySelector('#doneBtn').addEventListener('click', function () { shell.render(); });
       });
     });
 
