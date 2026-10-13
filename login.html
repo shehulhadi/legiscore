@@ -1,68 +1,274 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Sign in — LegisCore</title>
-<link rel="stylesheet" href="css/app.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0b1c3d">
+    <title>LegisCore — Sign in</title>
+    <link rel="stylesheet" href="css/base.css?v=2">
+    <link rel="stylesheet" href="css/layout.css?v=2">
+    <link rel="stylesheet" href="css/components.css?v=2">
+    <style>
+        body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: var(--s-4);
+            background:
+                radial-gradient(1200px 600px at 50% -10%, rgba(37, 84, 160, 0.08), transparent 60%),
+                linear-gradient(180deg, var(--bg), var(--bg-alt));
+        }
+
+        .login-shell {
+            width: 100%;
+            max-width: 400px;
+            animation: lc-rise var(--dur-4) var(--ease-out);
+        }
+
+        @keyframes lc-rise {
+            from { opacity: 0; transform: translateY(12px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .login-brand {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--s-3);
+            margin-bottom: var(--s-6);
+        }
+
+        .login-brand-mark {
+            width: 52px;
+            height: 52px;
+            border-radius: 14px;
+            background: linear-gradient(135deg, var(--navy-700), var(--navy-800));
+            color: var(--brass-400);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: var(--shadow-md), inset 0 1px 0 rgba(255,255,255,0.08);
+        }
+
+        .login-brand-text {
+            display: flex;
+            flex-direction: column;
+            line-height: 1.05;
+        }
+
+        .login-brand-name {
+            font-size: 26px;
+            font-weight: 700;
+            color: var(--navy-800);
+            letter-spacing: -0.03em;
+        }
+
+        .login-brand-sub {
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: var(--brass-600);
+            margin-top: 4px;
+        }
+
+        .login-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--r-lg);
+            box-shadow: var(--shadow-md);
+            padding: var(--s-6);
+        }
+
+        .login-card h1 {
+            font-size: 20px;
+            margin: 0 0 var(--s-2) 0;
+            letter-spacing: -0.02em;
+        }
+
+        .login-card .lede {
+            font-size: var(--fs-sm);
+            color: var(--text-muted);
+            margin: 0 0 var(--s-5) 0;
+        }
+
+        .login-card .btn-primary {
+            width: 100%;
+            height: 46px;
+            margin-top: var(--s-2);
+        }
+
+        .login-foot {
+            text-align: center;
+            font-size: var(--fs-xs);
+            color: var(--text-faint);
+            margin-top: var(--s-5);
+        }
+
+        .login-foot a { color: var(--text-muted); }
+
+        .login-error {
+            display: none;
+            margin-bottom: var(--s-4);
+        }
+
+        .login-error.show { display: block; }
+
+        .login-card .form-control {
+            height: 46px;
+            font-size: 15px;
+        }
+    </style>
 </head>
-<body class="auth-page">
-<main class="auth-wrap">
-  <div class="card">
-    <h1>LegisCore</h1>
-    <p class="sub">Sign in to your filing room</p>
-    <div class="err" id="err" hidden></div>
-    <form id="f" autocomplete="on" novalidate>
-      <label for="email">Email</label>
-      <input id="email" name="email" type="email" required autocomplete="username" inputmode="email">
-      <label for="password">Password</label>
-      <input id="password" name="password" type="password" required autocomplete="current-password">
-      <button class="primary" type="submit" id="btn">Sign in</button>
-    </form>
-  </div>
-</main>
-<script src="js/config.js"></script>
-<script src="js/core/supabase.js"></script>
-<script src="js/core/auth.js"></script>
-<script>
-  (function () {
-    // If already logged in, skip the form.
-    if (Auth.isLoggedIn() && Auth.currentUser()) {
-      window.location.replace('index.html');
-      return;
-    }
-    const f = document.getElementById('f');
-    const err = document.getElementById('err');
-    const btn = document.getElementById('btn');
+<body>
+    <div class="login-shell">
+        <div class="login-brand">
+            <div class="login-brand-mark">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                    <path d="M2 17l10 5 10-5"/>
+                    <path d="M2 12l10 5 10-5"/>
+                </svg>
+            </div>
+            <div class="login-brand-text">
+                <span class="login-brand-name">LegisCore</span>
+                <span class="login-brand-sub">Filing Room</span>
+            </div>
+        </div>
 
-    function show(msg) {
-      err.textContent = msg;
-      err.hidden = false;
-    }
-    function busy(on) {
-      btn.disabled = on;
-      btn.textContent = on ? 'Signing in…' : 'Sign in';
-    }
+        <div class="login-card">
+            <h1>Welcome back</h1>
+            <p class="lede">From paper files to organized digital work.</p>
 
-    f.addEventListener('submit', async function (e) {
-      e.preventDefault();
-      err.hidden = true;
-      const email = document.getElementById('email').value.trim();
-      const password = document.getElementById('password').value;
-      if (!email || !password) { show('Enter your email and password.'); return; }
-      busy(true);
-      try {
-        await Auth.login(email, password);
-        window.location.replace('index.html');
-      } catch (ex) {
-        const m = (ex && ex.message) ? ex.message : '';
-        if (/invalid|credentials|grant/i.test(m)) show('Wrong email or password.');
-        else if (/not active/i.test(m)) show('Your account is not active. Ask your administrator.');
-        else show(m || 'Could not sign in.');
-        busy(false);
-      }
-    });
-  })();
-</script>
+            <div id="loginError" class="alert alert-error login-error" role="alert"></div>
+
+            <form id="loginForm" novalidate>
+                <div class="form-group">
+                    <label for="email">Email address</label>
+                    <input
+                        type="email"
+                        id="email"
+                        name="email"
+                        class="form-control"
+                        placeholder="you@example.com"
+                        autocomplete="email"
+                        inputmode="email"
+                        required
+                        autofocus>
+                </div>
+
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input
+                        type="password"
+                        id="password"
+                        name="password"
+                        class="form-control"
+                        placeholder="Your password"
+                        autocomplete="current-password"
+                        required>
+                </div>
+
+                <button type="submit" id="signInBtn" class="btn btn-primary">
+                    <span id="signInLabel">Sign in</span>
+                </button>
+            </form>
+        </div>
+
+        <div class="login-foot">
+            &copy; LegisCore &middot; Twins Barristers
+        </div>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/api/auth-api.js"></script>
+    <script>
+    (function () {
+        'use strict';
+
+        const config  = window.LegisCoreConfig;
+        const api     = window.LegisCoreApi;
+        const authApi = api && api.authApi;
+
+        const form     = document.getElementById('loginForm');
+        const emailEl  = document.getElementById('email');
+        const passEl   = document.getElementById('password');
+        const errEl    = document.getElementById('loginError');
+        const submitEl = document.getElementById('signInBtn');
+        const labelEl  = document.getElementById('signInLabel');
+
+        if (!config || !api || !authApi) {
+            errEl.textContent = 'LegisCore failed to load. Please refresh the page.';
+            errEl.classList.add('show');
+            submitEl.disabled = true;
+            return;
+        }
+
+        // If already signed in, skip straight to the app.
+        if (authApi.isAuthenticated()) {
+            window.location.replace('index.html');
+            return;
+        }
+
+        function showError(msg) {
+            errEl.textContent = msg;
+            errEl.classList.add('show');
+        }
+
+        function clearError() {
+            errEl.textContent = '';
+            errEl.classList.remove('show');
+        }
+
+        function setBusy(busy) {
+            submitEl.disabled = busy;
+            labelEl.textContent = busy ? 'Signing in...' : 'Sign in';
+        }
+
+        function friendlyError(err) {
+            const status = err && err.status;
+            if (status === 400 || status === 401) {
+                return 'Email or password is incorrect.';
+            }
+            if (status === 429) {
+                return 'Too many attempts. Please wait a minute and try again.';
+            }
+            if (status === 0) {
+                return 'Could not reach the server. Check your connection.';
+            }
+            if (status === 408) {
+                return 'The request took too long. Please try again.';
+            }
+            return (err && err.message) || 'Could not sign in. Please try again.';
+        }
+
+        form.addEventListener('submit', async function (e) {
+            e.preventDefault();
+            clearError();
+
+            const email    = emailEl.value.trim();
+            const password = passEl.value;
+
+            if (!email || !password) {
+                showError('Enter your email and password.');
+                return;
+            }
+
+            setBusy(true);
+            try {
+                await authApi.login(email, password);
+                window.location.replace('index.html');
+            } catch (err) {
+                console.error('[login] failed:', err);
+                showError(friendlyError(err));
+                setBusy(false);
+                passEl.focus();
+                passEl.select();
+            }
+        });
+    })();
+    </script>
 </body>
 </html>
