@@ -2,8 +2,8 @@
  * LegisCore — pages/documents.js
  * Documents list view. Exposes window.LegisCoreDocuments.render(container).
  *
- * State here is local to the view (filters, rows, pagination). The
- * modal lives in pages/documents-modal.js and is invoked on row click.
+ * Filter by document type via chips, search across name/type, browse by
+ * status select. Row click opens the modal in pages/documents-modal.js.
  */
 
 (function(window) {
@@ -22,7 +22,7 @@
     const DOCUMENT_TYPES = [
         'Affidavit', 'Contract', 'Court Order', 'Receipt', 'Letter',
         'Power of Attorney', 'Client ID', 'Agreement', 'Will',
-        'Motion', 'Brief', 'Notice', 'Other',
+        'Motion', 'Brief', 'Notice', 'Other'
     ];
 
     const STATUSES = [
@@ -61,6 +61,24 @@
         return '<span class="badge badge-muted">' + esc(status || '—') + '</span>';
     }
 
+    function iconClassFor(row) {
+        const name = (row.name || '').toLowerCase();
+        const mime = (row.mime_type || '').toLowerCase();
+        if (mime.includes('pdf') || name.endsWith('.pdf')) return 'icon-pdf';
+        if (mime.includes('word') || name.endsWith('.doc') || name.endsWith('.docx')) return 'icon-word';
+        if (mime.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|heic)$/.test(name)) return 'icon-image';
+        return 'icon-other';
+    }
+
+    function iconLabelFor(row) {
+        const name = (row.name || '').toLowerCase();
+        const mime = (row.mime_type || '').toLowerCase();
+        if (mime.includes('pdf') || name.endsWith('.pdf')) return 'PDF';
+        if (mime.includes('word') || name.endsWith('.doc') || name.endsWith('.docx')) return 'DOC';
+        if (mime.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|heic)$/.test(name)) return 'IMG';
+        return 'FILE';
+    }
+
     function debounce(fn, ms) {
         let t = null;
         return function() {
@@ -88,7 +106,7 @@
 
         if (reset) {
             rows = [];
-            if (listEl) listEl.innerHTML = renderLoading();
+            if (listEl) listEl.innerHTML = renderSkeleton();
         }
         if (moreEl) moreEl.innerHTML = reset ? '' : '<div class="view-loading"><div class="spinner"></div></div>';
 
@@ -116,33 +134,45 @@
 
     // ---- renderers ----------------------------------------------------
 
-    function renderLoading() {
-        return (
-            '<div class="view-loading">' +
-                '<div class="spinner"></div>' +
-                '<p class="text-sm">Loading documents&hellip;</p>' +
-            '</div>'
-        );
+    function renderSkeleton() {
+        let s = '';
+        for (let i = 0; i < 5; i++) {
+            s +=
+                '<div class="doc-row" style="pointer-events:none">' +
+                    '<div class="skeleton skeleton-circle" style="width:40px;height:40px"></div>' +
+                    '<div class="doc-meta">' +
+                        '<div class="skeleton skeleton-line medium"></div>' +
+                        '<div class="skeleton skeleton-line short" style="margin-top:6px"></div>' +
+                    '</div>' +
+                '</div>';
+        }
+        return '<div class="card" style="padding:var(--s-2)">' + s + '</div>';
     }
 
     function renderError(msg) {
         return (
-            '<div style="padding:var(--space-5)">' +
+            '<div style="padding:var(--s-5)">' +
                 '<div class="alert alert-error" style="margin:0">' + esc(msg) + '</div>' +
             '</div>'
         );
     }
 
     function renderEmpty() {
+        const hasFilter = filters.q || filters.document_type || filters.status;
         return (
             '<div class="empty-state">' +
                 '<div class="empty-state-icon">&#128193;</div>' +
-                '<h2 class="empty-state-title">No documents</h2>' +
+                '<h2 class="empty-state-title">' +
+                    (hasFilter ? 'Nothing matches' : 'No documents yet') +
+                '</h2>' +
                 '<p class="empty-state-desc">' +
-                    (filters.q || filters.document_type || filters.status
-                        ? 'Nothing matches the current filters.'
-                        : 'Nothing here yet. Upload or scan a document to get started.') +
+                    (hasFilter
+                        ? 'Try clearing the search or filters.'
+                        : 'Add your first document to get started.') +
                 '</p>' +
+                (hasFilter
+                    ? '<button class="btn btn-secondary btn-sm" id="docs-clear-filters">Clear filters</button>'
+                    : '<button class="btn btn-primary btn-sm" id="docs-empty-new">New document</button>') +
             '</div>'
         );
     }
@@ -150,19 +180,30 @@
     function renderRow(r) {
         const matter = r.lc_matters ? (r.lc_matters.matter_number || r.lc_matters.title) : '';
         const client = r.lc_clients ? r.lc_clients.name : '';
+        const meta = [];
+        if (matter) meta.push(matter);
+        if (client) meta.push(client);
+
+        const metaLine = meta.length
+            ? '<div class="doc-sub">' +
+                meta.map(function(m) { return '<span>' + esc(m) + '</span>'; }).join('<span class="dot-sep"></span>') +
+                '<span class="dot-sep"></span>' +
+                '<span>' + esc(fmtDate(r.created_at)) + '</span>' +
+              '</div>'
+            : '<div class="doc-sub"><span>' + esc(fmtDate(r.created_at)) + '</span></div>';
+
         return (
-            '<tr data-doc-id="' + esc(r.id) + '" style="cursor:pointer">' +
-                '<td>' +
-                    '<div class="font-weight-medium">' + esc(r.name) + '</div>' +
-                    '<div class="text-xs text-muted">' +
-                        esc(r.document_type || 'Uncategorised') +
-                    '</div>' +
-                '</td>' +
-                '<td class="text-sm">' + esc(matter || '—') + '</td>' +
-                '<td class="text-sm">' + esc(client || '—') + '</td>' +
-                '<td>' + statusBadge(r.status) + '</td>' +
-                '<td class="text-sm text-muted">' + esc(fmtDate(r.created_at)) + '</td>' +
-            '</tr>'
+            '<div class="doc-row" data-doc-id="' + esc(r.id) + '">' +
+                '<div class="doc-icon ' + iconClassFor(r) + '">' + iconLabelFor(r) + '</div>' +
+                '<div class="doc-meta">' +
+                    '<div class="doc-name">' + esc(r.name) + '</div>' +
+                    metaLine +
+                '</div>' +
+                '<div style="display:flex;align-items:center;gap:var(--s-2);flex-shrink:0">' +
+                    statusBadge(r.status) +
+                    '<svg class="doc-action" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>' +
+                '</div>' +
+            '</div>'
         );
     }
 
@@ -172,36 +213,42 @@
 
         if (rows.length === 0) {
             listEl.innerHTML = renderEmpty();
+            wireEmptyActions();
             return;
         }
 
         const body = rows.map(renderRow).join('');
-        listEl.innerHTML =
-            '<div class="table-wrap">' +
-                '<table class="table">' +
-                    '<thead><tr>' +
-                        '<th>Document</th>' +
-                        '<th>Matter</th>' +
-                        '<th>Client</th>' +
-                        '<th>Status</th>' +
-                        '<th>Added</th>' +
-                    '</tr></thead>' +
-                    '<tbody>' + body + '</tbody>' +
-                '</table>' +
-            '</div>';
+        listEl.innerHTML = '<div class="card" style="padding:var(--s-2)">' + body + '</div>';
 
-        listEl.querySelectorAll('tr[data-doc-id]').forEach(function(tr) {
-            tr.addEventListener('click', function() {
-                const id = tr.getAttribute('data-doc-id');
+        listEl.querySelectorAll('[data-doc-id]').forEach(function(el) {
+            el.addEventListener('click', function() {
+                const id = el.getAttribute('data-doc-id');
                 if (window.LegisCoreDocumentsModal && window.LegisCoreDocumentsModal.open) {
                     window.LegisCoreDocumentsModal.open(id, function() {
                         load(true);
                     });
-                } else {
-                    console.warn('[LegisCoreDocuments] modal not loaded');
                 }
             });
         });
+    }
+
+    function wireEmptyActions() {
+        const clearBtn = document.getElementById('docs-clear-filters');
+        if (clearBtn) {
+            clearBtn.addEventListener('click', function() {
+                filters = { q: '', document_type: '', status: '' };
+                renderFilterUI();
+                load(true);
+            });
+        }
+        const newBtn = document.getElementById('docs-empty-new');
+        if (newBtn) {
+            newBtn.addEventListener('click', function() {
+                if (window.LegisCoreDocumentsModal && window.LegisCoreDocumentsModal.openNew) {
+                    window.LegisCoreDocumentsModal.openNew(function() { load(true); });
+                }
+            });
+        }
     }
 
     function renderMore() {
@@ -212,46 +259,49 @@
             return;
         }
         moreEl.innerHTML =
-            '<div style="text-align:center;padding:var(--space-4) 0">' +
+            '<div style="text-align:center;padding:var(--s-4) 0">' +
                 '<button class="btn btn-secondary btn-sm" id="docs-load-more">Load more</button>' +
             '</div>';
         const btn = document.getElementById('docs-load-more');
-        if (btn) {
-            btn.addEventListener('click', function() { load(false); });
-        }
+        if (btn) btn.addEventListener('click', function() { load(false); });
     }
 
-    function renderFilters() {
-        const typeOpts = ['<option value="">All types</option>']
-            .concat(DOCUMENT_TYPES.map(function(t) {
-                return '<option value="' + esc(t) + '">' + esc(t) + '</option>';
-            })).join('');
-        const statusOpts = STATUSES.map(function(s) {
-            return '<option value="' + esc(s.v) + '">' + esc(s.label) + '</option>';
+    function renderChips() {
+        const allChip =
+            '<button class="chip' + (filters.document_type === '' ? ' active' : '') + '" data-type="">' +
+                'All types' +
+            '</button>';
+        const typeChips = DOCUMENT_TYPES.map(function(t) {
+            const active = filters.document_type === t ? ' active' : '';
+            return '<button class="chip' + active + '" data-type="' + esc(t) + '">' + esc(t) + '</button>';
         }).join('');
+        return '<div class="chip-row" id="docs-chips">' + allChip + typeChips + '</div>';
+    }
 
-        return (
-            '<div class="card" style="margin-bottom:var(--space-4)">' +
-                '<div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:var(--space-3)" class="docs-filters">' +
-                    '<div>' +
-                        '<input type="search" id="docs-search" class="form-control" ' +
-                            'placeholder="Search by name or type..." ' +
-                            'value="' + esc(filters.q) + '" autocomplete="off">' +
-                    '</div>' +
-                    '<div>' +
-                        '<select id="docs-type" class="form-control">' + typeOpts + '</select>' +
-                    '</div>' +
-                    '<div>' +
-                        '<select id="docs-status" class="form-control">' + statusOpts + '</select>' +
-                    '</div>' +
-                '</div>' +
-            '</div>'
-        );
+    function renderFilterUI() {
+        const chipsEl = document.getElementById('docs-chips-wrap');
+        const searchEl = document.getElementById('docs-search');
+        const statusEl = document.getElementById('docs-status');
+        if (chipsEl) chipsEl.innerHTML = renderChips();
+        if (searchEl) searchEl.value = filters.q;
+        if (statusEl) statusEl.value = filters.status;
+        wireChips();
+    }
+
+    function wireChips() {
+        const chips = document.getElementById('docs-chips');
+        if (!chips) return;
+        chips.querySelectorAll('.chip').forEach(function(c) {
+            c.addEventListener('click', function() {
+                filters.document_type = c.getAttribute('data-type');
+                renderFilterUI();
+                load(true);
+            });
+        });
     }
 
     function wireFilters() {
         const search = document.getElementById('docs-search');
-        const type   = document.getElementById('docs-type');
         const status = document.getElementById('docs-status');
 
         if (search) {
@@ -260,13 +310,6 @@
                 filters.q = search.value;
                 load(true);
             }, 300));
-        }
-        if (type) {
-            type.value = filters.document_type;
-            type.addEventListener('change', function() {
-                filters.document_type = type.value;
-                load(true);
-            });
         }
         if (status) {
             status.value = filters.status;
@@ -304,21 +347,36 @@
         rows = [];
         hasMore = false;
 
+        const statusOpts = STATUSES.map(function(s) {
+            return '<option value="' + esc(s.v) + '">' + esc(s.label) + '</option>';
+        }).join('');
+
         container.innerHTML =
             '<div class="page-header">' +
                 '<div>' +
+                    '<div class="uppercase">Filing room</div>' +
                     '<h1>Documents</h1>' +
-                    '<p class="page-subtitle">All files for your firm. Search, filter, and open a document.</p>' +
+                    '<p class="page-subtitle">Every file for your firm, in one place.</p>' +
                 '</div>' +
                 '<div class="page-actions">' +
-                    '<button class="btn btn-primary btn-sm" id="docs-new-btn">New document</button>' +
+                    '<button class="btn btn-primary" id="docs-new-btn">' +
+                        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
+                        'New document' +
+                    '</button>' +
                 '</div>' +
             '</div>' +
-            renderFilters() +
-            '<div id="docs-list">' + renderLoading() + '</div>' +
+            '<div class="card" style="padding:var(--s-4);margin-bottom:var(--s-4)">' +
+                '<div style="display:grid;grid-template-columns:2fr 1fr;gap:var(--s-3)" class="docs-search-row">' +
+                    '<input type="search" id="docs-search" class="form-control" placeholder="Find a document by name or type..." autocomplete="off">' +
+                    '<select id="docs-status" class="form-control">' + statusOpts + '</select>' +
+                '</div>' +
+                '<div id="docs-chips-wrap" style="margin-top:var(--s-3)">' + renderChips() + '</div>' +
+            '</div>' +
+            '<div id="docs-list">' + renderSkeleton() + '</div>' +
             '<div id="docs-more"></div>';
 
         wireFilters();
+        wireChips();
         load(true);
     }
 
