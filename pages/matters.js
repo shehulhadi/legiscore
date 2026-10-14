@@ -2,9 +2,8 @@
  * LegisCore — pages/matters.js
  * Matters list view. Exposes window.LegisCoreMatters.render(container).
  *
- * Row click navigates to #/matter?id=<id> which pages/matter-detail.js
- * handles. Kept deliberately close in structure to pages/documents.js
- * so the two list views stay maintainable in parallel.
+ * Card rows, not a table — works on 360px phone and 1280px desktop.
+ * Row click navigates to #/matter?id=<id> handled by matter-detail.js.
  */
 
 (function(window) {
@@ -18,18 +17,20 @@
         return;
     }
 
-    const PAGE_SIZE = 20;
+    const PAGE_SIZE = 30;
 
     const MATTER_TYPES = [
-        'Litigation', 'Corporate', 'Real Estate', 'Probate', 'Trusts', 'Other',
+        'Litigation', 'Corporate', 'Real Estate', 'Probate', 'Trusts', 'Other'
     ];
 
     const STATUSES = [
-        { v: '',         label: 'All statuses' },
+        { v: '',         label: 'All' },
         { v: 'active',   label: 'Active' },
         { v: 'closed',   label: 'Closed' },
         { v: 'archived', label: 'Archived' },
     ];
+
+    // ---- helpers ------------------------------------------------------
 
     function esc(s) {
         return String(s == null ? '' : s)
@@ -56,6 +57,24 @@
         return '<span class="badge badge-muted">' + esc(status || '—') + '</span>';
     }
 
+    function typeIconBg(type) {
+        const t = String(type || '').toLowerCase();
+        if (t === 'litigation')  return 'style="background:var(--danger-100);color:var(--danger-700)"';
+        if (t === 'corporate')   return 'style="background:var(--info-100);color:var(--info-700)"';
+        if (t === 'real estate') return 'style="background:var(--success-100);color:var(--success-700)"';
+        if (t === 'probate')     return 'style="background:var(--warning-100);color:var(--warning-700)"';
+        if (t === 'trusts')      return 'style="background:var(--brass-100);color:var(--brass-600)"';
+        return 'style="background:var(--surface-muted);color:var(--text-muted)"';
+    }
+
+    function typeInitials(type) {
+        const t = String(type || '').trim();
+        if (!t) return 'MAT';
+        const words = t.split(/\s+/);
+        if (words.length === 1) return t.slice(0, 3).toUpperCase();
+        return words.map(function(w) { return w[0]; }).join('').slice(0, 3).toUpperCase();
+    }
+
     function debounce(fn, ms) {
         let t = null;
         return function() {
@@ -65,92 +84,104 @@
         };
     }
 
+    // ---- view state ---------------------------------------------------
+
     let filters = { q: '', type: '', status: '' };
     let rows = [];
-    let hasMore = false;
     let loading = false;
 
-    async function load(reset) {
+    // ---- queries ------------------------------------------------------
+
+    async function load() {
         if (loading) return;
         loading = true;
 
         const listEl = document.getElementById('matters-list');
-        const moreEl = document.getElementById('matters-more');
+        if (listEl) listEl.innerHTML = renderSkeleton();
 
-        if (reset) {
-            rows = [];
-            if (listEl) listEl.innerHTML = renderLoading();
-        }
-        if (moreEl) moreEl.innerHTML = reset ? '' : '<div class="view-loading"><div class="spinner"></div></div>';
-
-        const query = Object.assign({}, filters, {
-            limit: PAGE_SIZE,
-            offset: reset ? 0 : rows.length,
-        });
+        const query = Object.assign({}, filters, { limit: PAGE_SIZE });
 
         try {
-            const fetched = await mattersApi.list(query);
-            if (reset) rows = fetched;
-            else rows = rows.concat(fetched);
-            hasMore = fetched.length === PAGE_SIZE;
+            rows = await mattersApi.list(query);
             renderRows();
         } catch (err) {
             console.error('[LegisCoreMatters] load failed:', err);
             if (listEl) listEl.innerHTML = renderError(err.message || 'Could not load matters.');
-            if (moreEl) moreEl.innerHTML = '';
-            hasMore = false;
         } finally {
             loading = false;
-            renderMore();
         }
     }
 
-    function renderLoading() {
-        return (
-            '<div class="view-loading">' +
-                '<div class="spinner"></div>' +
-                '<p class="text-sm">Loading matters&hellip;</p>' +
-            '</div>'
-        );
+    // ---- renderers ----------------------------------------------------
+
+    function renderSkeleton() {
+        let s = '';
+        for (let i = 0; i < 5; i++) {
+            s +=
+                '<div class="doc-row" style="pointer-events:none">' +
+                    '<div class="skeleton skeleton-circle" style="width:40px;height:40px"></div>' +
+                    '<div class="doc-meta">' +
+                        '<div class="skeleton skeleton-line medium"></div>' +
+                        '<div class="skeleton skeleton-line short" style="margin-top:6px"></div>' +
+                    '</div>' +
+                '</div>';
+        }
+        return '<div class="card" style="padding:var(--s-2)">' + s + '</div>';
     }
 
     function renderError(msg) {
         return (
-            '<div style="padding:var(--space-5)">' +
+            '<div style="padding:var(--s-5)">' +
                 '<div class="alert alert-error" style="margin:0">' + esc(msg) + '</div>' +
             '</div>'
         );
     }
 
     function renderEmpty() {
+        const hasFilter = filters.q || filters.type || filters.status;
         return (
             '<div class="empty-state">' +
                 '<div class="empty-state-icon">&#128188;</div>' +
-                '<h2 class="empty-state-title">No matters</h2>' +
+                '<h2 class="empty-state-title">' +
+                    (hasFilter ? 'Nothing matches' : 'No matters yet') +
+                '</h2>' +
                 '<p class="empty-state-desc">' +
-                    (filters.q || filters.type || filters.status
-                        ? 'Nothing matches the current filters.'
-                        : 'Open a new matter to get started.') +
+                    (hasFilter
+                        ? 'Try clearing the search or filters.'
+                        : 'Open a matter to start filing documents.') +
                 '</p>' +
             '</div>'
         );
     }
 
-    function renderRow(r) {
-        const client = r.lc_clients ? r.lc_clients.name : '';
+    // Two-line card row: name + matter number on top, client + type + date below.
+    // Badge floated to the right of the name.
+    function renderRow(m) {
+        const client = m.lc_clients ? m.lc_clients.name : '';
+        const metaParts = [];
+        if (client) metaParts.push(client);
+        if (m.type) metaParts.push(m.type);
+        metaParts.push(fmtDate(m.created_at));
+
         return (
-            '<tr data-matter-id="' + esc(r.id) + '" style="cursor:pointer">' +
-                '<td>' +
-                    '<div class="font-weight-medium">' + esc(r.title) + '</div>' +
-                    '<div class="text-xs text-muted">' +
-                        esc(r.matter_number || 'no number') +
+            '<div class="doc-row" data-matter-id="' + esc(m.id) + '">' +
+                '<div class="doc-icon" ' + typeIconBg(m.type) + '>' + esc(typeInitials(m.type)) + '</div>' +
+                '<div class="doc-meta">' +
+                    '<div style="display:flex;align-items:center;gap:var(--s-2);min-width:0">' +
+                        '<div class="doc-name" style="flex:1;min-width:0">' + esc(m.title) + '</div>' +
+                        statusBadge(m.status) +
                     '</div>' +
-                '</td>' +
-                '<td class="text-sm">' + esc(client || '—') + '</td>' +
-                '<td class="text-sm">' + esc(r.type || '—') + '</td>' +
-                '<td>' + statusBadge(r.status) + '</td>' +
-                '<td class="text-sm text-muted">' + esc(fmtDate(r.created_at)) + '</td>' +
-            '</tr>'
+                    '<div class="doc-sub">' +
+                        (m.matter_number
+                            ? '<span class="text-muted" style="font-family:var(--font-mono);font-size:11px">' + esc(m.matter_number) + '</span>' +
+                              '<span class="dot-sep"></span>'
+                            : '') +
+                        metaParts.map(function(p) { return '<span>' + esc(p) + '</span>'; })
+                            .join('<span class="dot-sep"></span>') +
+                    '</div>' +
+                '</div>' +
+                '<svg class="doc-action" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>' +
+            '</div>'
         );
     }
 
@@ -164,109 +195,81 @@
         }
 
         const body = rows.map(renderRow).join('');
-        listEl.innerHTML =
-            '<div class="table-wrap">' +
-                '<table class="table">' +
-                    '<thead><tr>' +
-                        '<th>Matter</th>' +
-                        '<th>Client</th>' +
-                        '<th>Type</th>' +
-                        '<th>Status</th>' +
-                        '<th>Opened</th>' +
-                    '</tr></thead>' +
-                    '<tbody>' + body + '</tbody>' +
-                '</table>' +
-            '</div>';
+        listEl.innerHTML = '<div class="card" style="padding:var(--s-2)">' + body + '</div>';
 
-        listEl.querySelectorAll('tr[data-matter-id]').forEach(function(tr) {
-            tr.addEventListener('click', function() {
-                const id = tr.getAttribute('data-matter-id');
-                window.location.hash = '#/matter?id=' + encodeURIComponent(id);
+        listEl.querySelectorAll('[data-matter-id]').forEach(function(el) {
+            el.addEventListener('click', function() {
+                window.location.hash = '#/matter?id=' + encodeURIComponent(el.getAttribute('data-matter-id'));
             });
         });
     }
 
-    function renderMore() {
-        const moreEl = document.getElementById('matters-more');
-        if (!moreEl) return;
-        if (!hasMore || rows.length === 0) {
-            moreEl.innerHTML = '';
-            return;
-        }
-        moreEl.innerHTML =
-            '<div style="text-align:center;padding:var(--space-4) 0">' +
-                '<button class="btn btn-secondary btn-sm" id="matters-load-more">Load more</button>' +
-            '</div>';
-        const btn = document.getElementById('matters-load-more');
-        if (btn) btn.addEventListener('click', function() { load(false); });
+    function renderChips() {
+        const parts = STATUSES.map(function(s) {
+            const active = filters.status === s.v ? ' active' : '';
+            return '<button class="chip' + active + '" data-status="' + esc(s.v) + '">' + esc(s.label) + '</button>';
+        });
+        const typeChips = MATTER_TYPES.map(function(t) {
+            const active = filters.type === t ? ' active' : '';
+            return '<button class="chip' + active + '" data-type="' + esc(t) + '">' + esc(t) + '</button>';
+        });
+        return (
+            '<div class="chip-row" id="matters-status-chips">' + parts.join('') + '</div>' +
+            '<div class="chip-row" id="matters-type-chips">' + typeChips.join('') + '</div>'
+        );
     }
 
-    function renderFilters() {
-        const typeOpts = ['<option value="">All types</option>']
-            .concat(MATTER_TYPES.map(function(t) {
-                return '<option value="' + esc(t) + '">' + esc(t) + '</option>';
-            })).join('');
-        const statusOpts = STATUSES.map(function(s) {
-            return '<option value="' + esc(s.v) + '">' + esc(s.label) + '</option>';
-        }).join('');
+    function wireChips() {
+        const sc = document.getElementById('matters-status-chips');
+        if (sc) {
+            sc.querySelectorAll('.chip').forEach(function(c) {
+                c.addEventListener('click', function() {
+                    filters.status = c.getAttribute('data-status');
+                    refreshChips();
+                    load();
+                });
+            });
+        }
+        const tc = document.getElementById('matters-type-chips');
+        if (tc) {
+            tc.querySelectorAll('.chip').forEach(function(c) {
+                c.addEventListener('click', function() {
+                    const t = c.getAttribute('data-type');
+                    filters.type = (filters.type === t) ? '' : t;
+                    refreshChips();
+                    load();
+                });
+            });
+        }
+    }
 
-        return (
-            '<div class="card" style="margin-bottom:var(--space-4)">' +
-                '<div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:var(--space-3)" class="matters-filters">' +
-                    '<div>' +
-                        '<input type="search" id="matters-search" class="form-control" ' +
-                            'placeholder="Search by title or matter number..." ' +
-                            'value="' + esc(filters.q) + '" autocomplete="off">' +
-                    '</div>' +
-                    '<div>' +
-                        '<select id="matters-type" class="form-control">' + typeOpts + '</select>' +
-                    '</div>' +
-                    '<div>' +
-                        '<select id="matters-status" class="form-control">' + statusOpts + '</select>' +
-                    '</div>' +
-                '</div>' +
-            '</div>'
-        );
+    function refreshChips() {
+        const wrap = document.getElementById('matters-chips-wrap');
+        if (wrap) wrap.innerHTML = renderChips();
+        wireChips();
     }
 
     function wireFilters() {
         const search = document.getElementById('matters-search');
-        const type   = document.getElementById('matters-type');
-        const status = document.getElementById('matters-status');
-
         if (search) {
             search.value = filters.q;
             search.addEventListener('input', debounce(function() {
                 filters.q = search.value;
-                load(true);
+                load();
             }, 300));
-        }
-        if (type) {
-            type.value = filters.type;
-            type.addEventListener('change', function() {
-                filters.type = type.value;
-                load(true);
-            });
-        }
-        if (status) {
-            status.value = filters.status;
-            status.addEventListener('change', function() {
-                filters.status = status.value;
-                load(true);
-            });
         }
 
         const newBtn = document.getElementById('matters-new-btn');
         if (newBtn) {
             newBtn.addEventListener('click', function() {
                 if (window.LegisCoreMatterDetail && window.LegisCoreMatterDetail.openNew) {
-                    window.LegisCoreMatterDetail.openNew(function() {
-                        load(true);
-                    });
+                    window.LegisCoreMatterDetail.openNew(function() { load(); });
                 }
             });
         }
     }
+
+    // ---- main render --------------------------------------------------
 
     function render(container) {
         if (!container) return;
@@ -280,24 +283,30 @@
 
         filters = { q: '', type: '', status: '' };
         rows = [];
-        hasMore = false;
 
         container.innerHTML =
             '<div class="page-header">' +
                 '<div>' +
+                    '<div class="uppercase">Firm work</div>' +
                     '<h1>Matters</h1>' +
-                    '<p class="page-subtitle">All active and closed matters for your firm.</p>' +
+                    '<p class="page-subtitle">Every case your firm is handling.</p>' +
                 '</div>' +
                 '<div class="page-actions">' +
-                    '<button class="btn btn-primary btn-sm" id="matters-new-btn">New matter</button>' +
+                    '<button class="btn btn-primary" id="matters-new-btn">' +
+                        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
+                        'New matter' +
+                    '</button>' +
                 '</div>' +
             '</div>' +
-            renderFilters() +
-            '<div id="matters-list">' + renderLoading() + '</div>' +
-            '<div id="matters-more"></div>';
+            '<div class="card" style="padding:var(--s-4);margin-bottom:var(--s-4)">' +
+                '<input type="search" id="matters-search" class="form-control" placeholder="Find a matter by title or number..." autocomplete="off">' +
+                '<div id="matters-chips-wrap" style="margin-top:var(--s-3)">' + renderChips() + '</div>' +
+            '</div>' +
+            '<div id="matters-list">' + renderSkeleton() + '</div>';
 
         wireFilters();
-        load(true);
+        wireChips();
+        load();
     }
 
     window.LegisCoreMatters = { render: render };
