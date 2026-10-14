@@ -187,6 +187,7 @@
                         '</div>' +
                         '<button type="button" class="btn btn-primary btn-sm" id="dm-download">Download</button>' +
                     '</div>' +
+                    '<div id="dm-preview-box" style="margin-top:var(--s-3)"></div>' +
                 '</div>'
             );
         }
@@ -205,6 +206,55 @@
                 '<div class="text-sm">' + (value || '—') + '</div>' +
             '</div>'
         );
+    }
+
+    async function loadPreview(row) {
+        const box = document.getElementById('dm-preview-box');
+        if (!box || !row || !row.storage_key) return;
+
+        box.innerHTML = '<div style="padding:var(--s-4);text-align:center"><div class="spinner" style="margin:0 auto"></div></div>';
+
+        try {
+            const url = await storageApi.getSignedUrl(row.storage_key, 3600);
+            const mime = String(row.mime_type || '').toLowerCase();
+            const name = String(row.name || '').toLowerCase();
+            const isPdf = mime.includes('pdf') || name.endsWith('.pdf');
+            const isImage = mime.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|heic)$/.test(name);
+
+            if (isPdf) {
+                box.innerHTML =
+                    '<iframe src="' + esc(url) + '" ' +
+                    'style="width:100%;height:min(70vh,720px);border:1px solid var(--border);border-radius:var(--r);background:#fff;display:block" ' +
+                    'title="' + esc(row.name) + '"></iframe>' +
+                    '<div style="margin-top:var(--s-2);text-align:right">' +
+                        '<a href="' + esc(url) + '" target="_blank" rel="noopener" class="text-xs text-muted">Open in new tab</a>' +
+                    '</div>';
+            } else if (isImage) {
+                box.innerHTML =
+                    '<img src="' + esc(url) + '" alt="' + esc(row.name) + '" ' +
+                    'style="max-width:100%;max-height:70vh;border-radius:var(--r);display:block;margin:0 auto;border:1px solid var(--border)">' +
+                    '<div style="margin-top:var(--s-2);text-align:right">' +
+                        '<a href="' + esc(url) + '" target="_blank" rel="noopener" class="text-xs text-muted">Open full size</a>' +
+                    '</div>';
+            } else {
+                box.innerHTML =
+                    '<div style="padding:var(--s-5);text-align:center;background:var(--surface-muted);border-radius:var(--r)">' +
+                        '<div class="text-sm text-muted">No preview for this file type.</div>' +
+                        '<div class="text-xs text-faint" style="margin-top:var(--s-1)">Download to open it.</div>' +
+                    '</div>';
+            }
+        } catch (err) {
+            box.innerHTML =
+                '<div class="alert alert-error" style="margin:0">' +
+                    esc('Could not load preview: ' + (err.message || 'unknown error')) +
+                '</div>';
+        }
+    }
+
+    function widenModal() {
+        if (!backdropEl) return;
+        const modal = backdropEl.querySelector('.modal');
+        if (modal) modal.style.maxWidth = '860px';
     }
 
     function renderDetailsView(row) {
@@ -240,6 +290,11 @@
             '<button class="btn btn-primary" id="dm-edit">Edit</button>';
 
         renderShell('Document details', headerBlock + fileSection + detailsSection, footer);
+
+        if (row.storage_key) {
+            widenModal();
+            loadPreview(row);
+        }
 
         backdropEl.querySelector('#dm-close2').addEventListener('click', function() { if (!busy) close(); });
         backdropEl.querySelector('#dm-edit').addEventListener('click', function() {
