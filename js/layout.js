@@ -59,8 +59,13 @@
             '<aside class="app-sidebar" id="app-sidebar" aria-label="Sidebar">' +
                 '<div class="sidebar-header">' +
                     '<a href="#/dashboard" class="sidebar-brand">' +
-                        '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>' +
-                        '<span>LegisCore</span>' +
+                        '<span class="sidebar-brand-mark">' +
+                            '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>' +
+                        '</span>' +
+                        '<span class="sidebar-brand-text">' +
+                            '<span class="sidebar-brand-name" id="sidebar-firm-name">LegisCore</span>' +
+                            '<small>Filing room</small>' +
+                        '</span>' +
                     '</a>' +
                 '</div>' +
                 '<nav class="sidebar-nav">' +
@@ -68,7 +73,7 @@
                     '<ul class="nav-list">' + items + '</ul>' +
                 '</nav>' +
                 '<div class="sidebar-footer">' +
-                    '<div>Twins Barristers</div>' +
+                    '<div><span class="dot"></span><span id="sidebar-firm-country">Nigeria</span></div>' +
                 '</div>' +
             '</aside>' +
             '<div class="sidebar-overlay" id="sidebar-overlay"></div>'
@@ -205,6 +210,27 @@
             updateActiveNav(evt.path);
             updateTitle(evt.path);
         });
+
+        loadFirmName();
+    }
+
+    async function loadFirmName() {
+        const api = window.LegisCoreApi;
+        const orgId = state.get('orgId');
+        if (!api || !orgId) return;
+        try {
+            const rows = await api.rest(
+                '/lc_organizations?id=eq.' + encodeURIComponent(orgId) + '&select=name,country'
+            );
+            const org = Array.isArray(rows) && rows[0] ? rows[0] : null;
+            if (!org) return;
+            const nameEl = document.getElementById('sidebar-firm-name');
+            const countryEl = document.getElementById('sidebar-firm-country');
+            if (nameEl && org.name) nameEl.textContent = org.name;
+            if (countryEl && org.country) countryEl.textContent = org.country;
+        } catch (e) {
+            console.warn('[LegisCoreLayout] could not load firm name:', e);
+        }
     }
 
     window.LegisCoreLayout = {
