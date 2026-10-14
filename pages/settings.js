@@ -191,26 +191,31 @@
 
         const rows = staffCache.map(function(u) {
             const me = (state.get('user') || {}).id === u.id;
-            const roleOptions = ROLES.map(function(r) {
-                return '<option value="' + esc(r.v) + '"' + (r.v === u.role ? ' selected' : '') + '>' + esc(r.label) + '</option>';
-            }).join('');
+
+            // Line 1: name + role badge, side by side.
+            // Line 2: email + joined date. Deactivated staff show a small badge here.
+            const subParts = [esc(u.email)];
+            if (u.active === false) subParts.push('Deactivated');
+            subParts.push(fmtRelative(u.created_at));
 
             return (
-                '<div class="doc-row" data-user-id="' + esc(u.id) + '" style="cursor:default">' +
+                '<div class="doc-row st-edit-user" data-user-id="' + esc(u.id) + '" style="cursor:pointer' + (u.active === false ? ';opacity:0.7' : '') + '">' +
                     '<div class="user-avatar">' + esc(initials(u.name)) + '</div>' +
                     '<div class="doc-meta">' +
-                        '<div class="doc-name">' + esc(u.name) + (me ? ' <span class="text-xs text-muted">(you)</span>' : '') + '</div>' +
+                        '<div style="display:flex;align-items:center;gap:var(--s-2);min-width:0">' +
+                            '<div class="doc-name" style="flex:1;min-width:0">' +
+                                esc(u.name) +
+                                (me ? ' <span class="text-xs text-muted">(you)</span>' : '') +
+                            '</div>' +
+                            roleBadge(u.role) +
+                        '</div>' +
                         '<div class="doc-sub">' +
-                            '<span>' + esc(u.email) + '</span>' +
-                            '<span class="dot-sep"></span>' +
-                            '<span>' + esc(fmtRelative(u.created_at)) + '</span>' +
+                            subParts.map(function(p, i) {
+                                return (i > 0 ? '<span class="dot-sep"></span>' : '') + '<span>' + p + '</span>';
+                            }).join('') +
                         '</div>' +
                     '</div>' +
-                    '<div style="display:flex;align-items:center;gap:var(--s-2);flex-shrink:0">' +
-                        roleBadge(u.role) +
-                        activeBadge(u.active) +
-                        '<button class="btn btn-ghost btn-sm st-edit-user" data-user-id="' + esc(u.id) + '">Edit</button>' +
-                    '</div>' +
+                    '<svg class="doc-action" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>' +
                 '</div>'
             );
         }).join('');
