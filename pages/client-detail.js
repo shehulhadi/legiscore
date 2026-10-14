@@ -73,6 +73,24 @@
         return '<span class="badge badge-muted">' + esc(status || '—') + '</span>';
     }
 
+    function typeIconBg(type) {
+        const t = String(type || '').toLowerCase();
+        if (t === 'litigation')  return 'style="background:var(--danger-100);color:var(--danger-700)"';
+        if (t === 'corporate')   return 'style="background:var(--info-100);color:var(--info-700)"';
+        if (t === 'real estate') return 'style="background:var(--success-100);color:var(--success-700)"';
+        if (t === 'probate')     return 'style="background:var(--warning-100);color:var(--warning-700)"';
+        if (t === 'trusts')      return 'style="background:var(--brass-100);color:var(--brass-600)"';
+        return 'style="background:var(--surface-muted);color:var(--text-muted)"';
+    }
+
+    function typeInitials(type) {
+        const t = String(type || '').trim();
+        if (!t) return 'MAT';
+        const words = t.split(/\s+/);
+        if (words.length === 1) return t.slice(0, 3).toUpperCase();
+        return words.map(function(w) { return w[0]; }).join('').slice(0, 3).toUpperCase();
+    }
+
     function isAdministrator() {
         const u = state.get('user');
         return !!(u && u.role === 'administrator');
@@ -142,23 +160,28 @@
             );
         }
         const rowsHtml = matters.map(function(m) {
+            const metaParts = [];
+            if (m.type) metaParts.push(m.type);
+            metaParts.push(fmtDate(m.created_at));
+
             return (
                 '<div class="doc-row" data-matter-id="' + esc(m.id) + '">' +
-                    '<div class="doc-icon">&#128193;</div>' +
+                    '<div class="doc-icon" ' + typeIconBg(m.type) + '>' + esc(typeInitials(m.type)) + '</div>' +
                     '<div class="doc-meta">' +
-                        '<div class="doc-name">' + esc(m.title) + '</div>' +
+                        '<div style="display:flex;align-items:center;gap:var(--s-2);min-width:0">' +
+                            '<div class="doc-name" style="flex:1;min-width:0">' + esc(m.title) + '</div>' +
+                            statusBadge(m.status) +
+                        '</div>' +
                         '<div class="doc-sub">' +
-                            '<span>' + esc(m.matter_number || 'no number') + '</span>' +
-                            '<span class="dot-sep"></span>' +
-                            '<span>' + esc(m.type || '—') + '</span>' +
-                            '<span class="dot-sep"></span>' +
-                            '<span>' + esc(fmtDate(m.created_at)) + '</span>' +
+                            (m.matter_number
+                                ? '<span class="text-muted" style="font-family:var(--font-mono);font-size:11px">' + esc(m.matter_number) + '</span>' +
+                                  '<span class="dot-sep"></span>'
+                                : '') +
+                            metaParts.map(function(p) { return '<span>' + esc(p) + '</span>'; })
+                                .join('<span class="dot-sep"></span>') +
                         '</div>' +
                     '</div>' +
-                    '<div style="display:flex;align-items:center;gap:var(--s-2)">' +
-                        statusBadge(m.status) +
-                        '<svg class="doc-action" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>' +
-                    '</div>' +
+                    '<svg class="doc-action" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>' +
                 '</div>'
             );
         }).join('');
