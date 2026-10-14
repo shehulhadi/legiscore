@@ -164,11 +164,15 @@
         return Array.isArray(rows) ? rows.length : 0;
     }
 
-    async function fetchAwaitingScan() {
+    async function fetchScannedThisMonth() {
         const org = orgFilter();
         if (!org) throw new Error('No active organization.');
+        const since = daysFromNow(-30);
         const rows = await api.rest(
-            '/lc_physical_files?' + org + '&status=eq.' + encodeURIComponent('Awaiting Scan') + '&select=id'
+            '/lc_documents?' + org +
+            '&source=eq.scanned' +
+            '&created_at=gte.' + encodeURIComponent(since) +
+            '&select=id'
         );
         return Array.isArray(rows) ? rows.length : 0;
     }
@@ -184,17 +188,6 @@
             '&due_at=gte.' + encodeURIComponent(now) +
             '&due_at=lte.' + encodeURIComponent(soon) +
             '&order=due_at.asc&limit=6&select=*'
-        );
-    }
-
-    async function fetchAwaitingScanList() {
-        const org = orgFilter();
-        if (!org) throw new Error('No active organization.');
-        return api.rest(
-            '/lc_physical_files?' + org +
-            '&status=eq.' + encodeURIComponent('Awaiting Scan') +
-            '&order=created_at.desc&limit=5' +
-            '&select=id,file_number,client_id,matter_id,category,cabinet,shelf'
         );
     }
 
@@ -232,31 +225,6 @@
             );
         }).join('');
         return '<div class="timeline">' + items + '</div>';
-    }
-
-    function renderAwaitingScanList(rows) {
-        if (!rows || rows.length === 0) {
-            return panelEmpty('&#128230;', 'All caught up', 'No paper files waiting to be scanned.');
-        }
-        return rows.map(function(r) {
-            const loc = [r.cabinet, r.shelf].filter(Boolean).join(' / ') || 'unfiled';
-            return (
-                '<div class="doc-row">' +
-                    '<div class="doc-icon icon-other">' +
-                        '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>' +
-                    '</div>' +
-                    '<div class="doc-meta">' +
-                        '<div class="doc-name">' + esc(r.file_number || r.id) + '</div>' +
-                        '<div class="doc-sub">' +
-                            '<span>' + esc(r.category || 'Uncategorised') + '</span>' +
-                            '<span class="dot-sep"></span>' +
-                            '<span>' + esc(loc) + '</span>' +
-                        '</div>' +
-                    '</div>' +
-                    '<span class="badge badge-warning">Scan</span>' +
-                '</div>'
-            );
-        }).join('');
     }
 
     function activityDotClass(type) {
@@ -319,30 +287,26 @@
             '<div class="stat-grid" id="dash-stats">' +
                 statSkeleton('Active matters') +
                 statSkeleton('Added this week') +
-                statSkeleton('Awaiting digitisation') +
+                statSkeleton('Scanned this month') +
                 statSkeleton('Deadlines in 30 days') +
             '</div>' +
             panel('dash-deadlines', 'Upcoming deadlines', panelSkeleton(),
                 '<a class="btn btn-ghost btn-sm" href="#/matters">View matters</a>') +
-            panel('dash-scan', 'Awaiting digitisation', panelSkeleton(),
-                '<a class="btn btn-ghost btn-sm" href="#/physical-files">View files</a>') +
             panel('dash-activity', 'Recent activity', panelSkeleton(), '');
 
         const statsEl    = container.querySelector('#dash-stats');
         const deadlinesEl = container.querySelector('#dash-deadlines');
-        const scanEl     = container.querySelector('#dash-scan');
         const activityEl = container.querySelector('#dash-activity');
 
         const results = await Promise.allSettled([
             fetchActiveMatters(),
             fetchDocsThisWeek(),
-            fetchAwaitingScan(),
+            fetchScannedThisMonth(),
             fetchUpcomingDeadlines(),
-            fetchAwaitingScanList(),
             fetchRecentActivity(),
         ]);
 
-        const [mattersRes, docsRes, scanCountRes, deadlinesRes, scanListRes, activityRes] = results;
+        const [mattersRes, docsRes, scanCountRes, deadlinesRes, activityRes] = results;
 
         const matterCount = mattersRes.status === 'fulfilled' ? mattersRes.value : null;
         const docsCount   = docsRes.status === 'fulfilled'    ? docsRes.value    : null;
@@ -359,9 +323,9 @@
                 docsCount === null ? '—' : docsCount,
                 docsCount === null ? 'could not load' : 'last 7 days',
                 false) +
-            statCard('Awaiting digitisation',
+            statCard('Scanned this month',
                 scanCount === null ? '—' : scanCount,
-                scanCount === null ? 'could not load' : 'paper files to scan',
+                scanCount === null ? 'could not load' : 'added in last 30 days',
                 true) +
             statCard('Deadlines in 30 days',
                 deadlineCount === null ? '—' : deadlineCount,
@@ -371,10 +335,6 @@
         deadlinesEl.innerHTML = deadlinesRes.status === 'fulfilled'
             ? renderDeadlines(deadlinesRes.value)
             : panelError('Could not load deadlines.');
-
-        scanEl.innerHTML = scanListRes.status === 'fulfilled'
-            ? renderAwaitingScanList(scanListRes.value)
-            : panelError('Could not load physical files.');
 
         activityEl.innerHTML = activityRes.status === 'fulfilled'
             ? renderActivity(activityRes.value)
