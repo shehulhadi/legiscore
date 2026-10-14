@@ -159,7 +159,7 @@
         return api.rest(
             '/lc_activities?' + org +
             '&order=created_at.desc&limit=6' +
-            '&select=id,text,who,ref_type,created_at'
+            '&select=id,text,who,ref_type,ref_id,created_at'
         );
     }
 
@@ -356,10 +356,20 @@
         }
 
         const items = activities.map(function(a) {
+            const clickable = a.ref_id && (
+                a.ref_type === 'document' ||
+                a.ref_type === 'client' ||
+                a.ref_type === 'matter'
+            );
+            const attrs = clickable
+                ? ' data-ref-type="' + esc(a.ref_type) + '" data-ref-id="' + esc(a.ref_id) + '" style="cursor:pointer"'
+                : '';
             return (
-                '<div class="timeline-item">' +
+                '<div class="timeline-item"' + attrs + '>' +
                     '<div class="timeline-dot ' + dotClass(a.ref_type) + '"></div>' +
-                    '<div class="timeline-text" style="font-size:var(--fs-sm)">' + esc(a.text) + '</div>' +
+                    '<div class="timeline-text" style="font-size:var(--fs-sm)' + (clickable ? ';color:var(--navy-600)' : '') + '">' +
+                        esc(a.text) +
+                    '</div>' +
                     '<div class="timeline-meta">' +
                         '<span>' + esc(a.who || 'system') + '</span>' +
                         '<span class="dot-sep"></span>' +
@@ -371,7 +381,10 @@
 
         return (
             '<div class="card">' +
-                '<div class="card-header"><h3 class="card-title">Activity</h3></div>' +
+                '<div class="card-header">' +
+                    '<h3 class="card-title">Activity</h3>' +
+                    '<a class="btn btn-ghost btn-sm" href="#/settings?tab=activity">View all</a>' +
+                '</div>' +
                 '<div class="card-body">' +
                     '<div class="timeline">' + items + '</div>' +
                 '</div>' +
@@ -556,6 +569,24 @@
         container.querySelectorAll('[data-client-id]').forEach(function(el) {
             el.addEventListener('click', function() {
                 window.location.hash = '#/client?id=' + encodeURIComponent(el.getAttribute('data-client-id'));
+            });
+        });
+
+        // Wire activity items → their targets
+        container.querySelectorAll('[data-ref-type]').forEach(function(el) {
+            el.addEventListener('click', function() {
+                const type = el.getAttribute('data-ref-type');
+                const id = el.getAttribute('data-ref-id');
+                if (!id) return;
+                if (type === 'document') {
+                    if (window.LegisCoreDocumentsModal && window.LegisCoreDocumentsModal.open) {
+                        window.LegisCoreDocumentsModal.open(id, function() { render(container); });
+                    }
+                } else if (type === 'client') {
+                    window.location.hash = '#/client?id=' + encodeURIComponent(id);
+                } else if (type === 'matter') {
+                    window.location.hash = '#/matter?id=' + encodeURIComponent(id);
+                }
             });
         });
     }
