@@ -117,7 +117,25 @@
         router.register('clients', {
             title: 'Clients',
             allowedRoles: BOTH,
-            render: placeholder('Clients', 'Client directory and per-client documents.'),
+            render: function(container) {
+                if (window.LegisCoreClients && typeof window.LegisCoreClients.render === 'function') {
+                    window.LegisCoreClients.render(container);
+                } else {
+                    placeholder('Clients', 'Clients module failed to load.')(container);
+                }
+            },
+        });
+
+        router.register('client', {
+            title: 'Client',
+            allowedRoles: BOTH,
+            render: function(container, params) {
+                if (window.LegisCoreClientDetail && typeof window.LegisCoreClientDetail.render === 'function') {
+                    window.LegisCoreClientDetail.render(container, params);
+                } else {
+                    placeholder('Client', 'Client detail module failed to load.')(container);
+                }
+            },
         });
 
         router.register('physical-files', {
