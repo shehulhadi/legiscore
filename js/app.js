@@ -147,7 +147,13 @@
         router.register('settings', {
             title: 'Settings',
             allowedRoles: ADMIN_ONLY,
-            render: placeholder('Settings', 'Staff, permissions, document types.'),
+            render: function(container) {
+                if (window.LegisCoreSettings && typeof window.LegisCoreSettings.render === 'function') {
+                    window.LegisCoreSettings.render(container);
+                } else {
+                    placeholder('Settings', 'Settings module failed to load.')(container);
+                }
+            },
         });
     }
 
