@@ -1,16 +1,17 @@
 /**
  * LegisCore — pages/documents-modal.js
- * Document modal with three modes:
- *   view  — read-only details + actions (Download, Edit, Delete)
- *   edit  — editable form with destination picker
- *   new   — create with source picker (upload / camera) + destination
- *
- * Exposes window.LegisCoreDocumentsModal.
+ * Document modal — view, edit, new.
  *
  * Destination model:
  *   Firm    — client_id null, matter_id null
  *   Client  — client_id set,  matter_id null
  *   Matter  — client_id set,  matter_id set
+ *
+ * The destination is context-driven — set by the page that opened the
+ * modal, or by the document being edited. It appears read-only. A small
+ * "Change" link reveals the picker for edge cases.
+ *
+ * Exposes window.LegisCoreDocumentsModal.
  */
 
 (function(window) {
@@ -47,12 +48,20 @@
     let isAdmin = false;
     let pickedFile = null;
     let pickedSource = null;   // 'upload' | 'photo' | null
-    let destinationType = 'firm';  // 'firm' | 'client' | 'matter'
-    let selectedClientId = '';
-    let selectedMatterId = '';
-    let clientsCache = null;   // loaded lazily
-    let mattersCache = null;
     let busy = false;
+
+    // Current destination — set on open, drives readForm().
+    let destination = {
+        type: 'firm',
+        clientId: '',
+        matterId: '',
+        clientName: '',
+        matterName: '',
+    };
+
+    let pickerOpen = false;
+    let clientsCache = null;
+    let mattersCache = {};
 
     // ---- helpers ------------------------------------------------------
 
@@ -94,20 +103,21 @@
         return '<span class="badge badge-muted">' + esc(status || '—') + '</span>';
     }
 
-    function destinationLabel(row) {
-        if (row.matter_id && row.lc_matters) {
-            return 'Matter · ' + (row.lc_matters.title || row.lc_matters.matter_number || row.matter_id);
-        }
-        if (row.matter_id) return 'Matter · ' + row.matter_id;
-        if (row.client_id && row.lc_clients) return 'Client · ' + row.lc_clients.name;
-        if (row.client_id) return 'Client · ' + row.client_id;
-        return 'Firm document';
-    }
-
     function allowedExtension(name) {
         const lower = String(name || '').toLowerCase();
         const ok = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png', '.txt'];
         return ok.some(function(ext) { return lower.endsWith(ext); });
+    }
+
+    function destinationLine(dest) {
+        dest = dest || destination;
+        if (dest.type === 'matter') {
+            return 'Matter · ' + (dest.matterName || dest.matterId || 'unknown');
+        }
+        if (dest.type === 'client') {
+            return 'Client · ' + (dest.clientName || dest.clientId || 'unknown');
+        }
+        return 'Firm document';
     }
 
     // ---- modal plumbing -----------------------------------------------
@@ -119,10 +129,8 @@
         currentRow = null;
         pickedFile = null;
         pickedSource = null;
-        selectedClientId = '';
-        selectedMatterId = '';
-        destinationType = 'firm';
         busy = false;
+        pickerOpen = false;
     }
 
     function ensureBackdrop() {
@@ -208,55 +216,6 @@
         );
     }
 
-    async function loadPreview(row) {
-        const box = document.getElementById('dm-preview-box');
-        if (!box || !row || !row.storage_key) return;
-
-        box.innerHTML = '<div style="padding:var(--s-4);text-align:center"><div class="spinner" style="margin:0 auto"></div></div>';
-
-        try {
-            const url = await storageApi.getSignedUrl(row.storage_key, 3600);
-            const mime = String(row.mime_type || '').toLowerCase();
-            const name = String(row.name || '').toLowerCase();
-            const isPdf = mime.includes('pdf') || name.endsWith('.pdf');
-            const isImage = mime.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|heic)$/.test(name);
-
-            if (isPdf) {
-                box.innerHTML =
-                    '<iframe src="' + esc(url) + '" ' +
-                    'style="width:100%;height:min(70vh,720px);border:1px solid var(--border);border-radius:var(--r);background:#fff;display:block" ' +
-                    'title="' + esc(row.name) + '"></iframe>' +
-                    '<div style="margin-top:var(--s-2);text-align:right">' +
-                        '<a href="' + esc(url) + '" target="_blank" rel="noopener" class="text-xs text-muted">Open in new tab</a>' +
-                    '</div>';
-            } else if (isImage) {
-                box.innerHTML =
-                    '<img src="' + esc(url) + '" alt="' + esc(row.name) + '" ' +
-                    'style="max-width:100%;max-height:70vh;border-radius:var(--r);display:block;margin:0 auto;border:1px solid var(--border)">' +
-                    '<div style="margin-top:var(--s-2);text-align:right">' +
-                        '<a href="' + esc(url) + '" target="_blank" rel="noopener" class="text-xs text-muted">Open full size</a>' +
-                    '</div>';
-            } else {
-                box.innerHTML =
-                    '<div style="padding:var(--s-5);text-align:center;background:var(--surface-muted);border-radius:var(--r)">' +
-                        '<div class="text-sm text-muted">No preview for this file type.</div>' +
-                        '<div class="text-xs text-faint" style="margin-top:var(--s-1)">Download to open it.</div>' +
-                    '</div>';
-            }
-        } catch (err) {
-            box.innerHTML =
-                '<div class="alert alert-error" style="margin:0">' +
-                    esc('Could not load preview: ' + (err.message || 'unknown error')) +
-                '</div>';
-        }
-    }
-
-    function widenModal() {
-        if (!backdropEl) return;
-        const modal = backdropEl.querySelector('.modal');
-        if (modal) modal.style.maxWidth = '860px';
-    }
-
     function renderDetailsView(row) {
         const headerBlock =
             '<div style="margin-bottom:var(--s-4)">' +
@@ -277,7 +236,7 @@
         const detailsSection =
             '<div>' +
                 '<div class="uppercase" style="margin-bottom:var(--s-2)">Where it lives</div>' +
-                metaRow('Filed under', esc(destinationLabel(row))) +
+                metaRow('Filed under', esc(destinationLine())) +
                 metaRow('Added', esc(fmtDate(row.created_at, true))) +
                 metaRow('Updated', esc(fmtDate(row.updated_at, true))) +
                 metaRow('Expires', row.expires_at ? esc(fmtDate(row.expires_at)) : 'No expiry set') +
@@ -292,7 +251,8 @@
         renderShell('Document details', headerBlock + fileSection + detailsSection, footer);
 
         if (row.storage_key) {
-            widenModal();
+            const modal = backdropEl.querySelector('.modal');
+            if (modal) modal.style.maxWidth = '860px';
             loadPreview(row);
         }
 
@@ -316,26 +276,119 @@
         });
     }
 
+    async function loadPreview(row) {
+        const box = document.getElementById('dm-preview-box');
+        if (!box || !row || !row.storage_key) return;
+
+        box.innerHTML = '<div style="padding:var(--s-4);text-align:center"><div class="spinner" style="margin:0 auto"></div></div>';
+
+        try {
+            const url = await storageApi.getSignedUrl(row.storage_key, 3600);
+            const mime = String(row.mime_type || '').toLowerCase();
+            const name = String(row.name || '').toLowerCase();
+            const isPdf = mime.includes('pdf') || name.endsWith('.pdf');
+            const isImage = mime.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|heic)$/.test(name);
+
+            if (isPdf) {
+                box.innerHTML =
+                    '<iframe src="' + esc(url) + '" ' +
+                    'style="width:100%;height:min(70vh,720px);border:1px solid var(--border);border-radius:var(--r);background:#fff;display:block"></iframe>' +
+                    '<div style="margin-top:var(--s-2);text-align:right">' +
+                        '<a href="' + esc(url) + '" target="_blank" rel="noopener" class="text-xs text-muted">Open in new tab</a>' +
+                    '</div>';
+            } else if (isImage) {
+                box.innerHTML =
+                    '<img src="' + esc(url) + '" alt="' + esc(row.name) + '" ' +
+                    'style="max-width:100%;max-height:70vh;border-radius:var(--r);display:block;margin:0 auto;border:1px solid var(--border)">';
+            } else {
+                box.innerHTML =
+                    '<div style="padding:var(--s-4);text-align:center;background:var(--surface-muted);border-radius:var(--r)">' +
+                        '<div class="text-sm text-muted">No preview for this file type. Download to open it.</div>' +
+                    '</div>';
+            }
+        } catch (err) {
+            box.innerHTML =
+                '<div class="alert alert-error" style="margin:0">Could not load preview.</div>';
+        }
+    }
+
     // ================================================================
-    // EDIT STATE
+    // DESTINATION STATE
     // ================================================================
+
+    function resetDestination() {
+        destination = { type: 'firm', clientId: '', matterId: '', clientName: '', matterName: '' };
+        pickerOpen = false;
+    }
+
+    async function setDestinationFromPreset(preset) {
+        preset = preset || {};
+        if (preset.matterId) {
+            destination.type = 'matter';
+            destination.matterId = preset.matterId;
+            destination.clientId = preset.clientId || '';
+        } else if (preset.clientId) {
+            destination.type = 'client';
+            destination.clientId = preset.clientId;
+            destination.matterId = '';
+        } else {
+            destination.type = 'firm';
+            destination.clientId = '';
+            destination.matterId = '';
+        }
+        await hydrateNames();
+    }
+
+    async function hydrateNames() {
+        // Matter name
+        if (destination.matterId && !destination.matterName) {
+            try {
+                const m = await mattersApi.get(destination.matterId);
+                destination.matterName = m.title || m.matter_number || destination.matterId;
+                if (m.client_id && !destination.clientId) {
+                    destination.clientId = m.client_id;
+                }
+            } catch (_) { destination.matterName = destination.matterId; }
+        }
+        // Client name
+        if (destination.clientId && !destination.clientName) {
+            try {
+                const c = await clientsApi.get(destination.clientId);
+                destination.clientName = c.name || destination.clientId;
+            } catch (_) { destination.clientName = destination.clientId; }
+        }
+    }
 
     function prepareEditState(row) {
         pickedFile = null;
         pickedSource = row.source === 'scanned' ? 'photo' : (row.storage_key ? 'upload' : null);
+
+        // Backfill client_id from embedded matter if the doc has a matter
+        // but no explicit client (older docs created before destinations).
+        const resolvedClientId = row.client_id
+            || (row.lc_matters && row.lc_matters.client_id)
+            || '';
+
         if (row.matter_id) {
-            destinationType = 'matter';
-            selectedMatterId = row.matter_id;
-            selectedClientId = row.client_id || '';
+            destination = {
+                type: 'matter',
+                clientId: resolvedClientId,
+                matterId: row.matter_id,
+                clientName: (row.lc_clients && row.lc_clients.name) || '',
+                matterName: (row.lc_matters && row.lc_matters.title) || '',
+            };
         } else if (row.client_id) {
-            destinationType = 'client';
-            selectedClientId = row.client_id;
-            selectedMatterId = '';
+            destination = {
+                type: 'client',
+                clientId: row.client_id,
+                matterId: '',
+                clientName: (row.lc_clients && row.lc_clients.name) || '',
+                matterName: '',
+            };
         } else {
-            destinationType = 'firm';
-            selectedClientId = '';
-            selectedMatterId = '';
+            resetDestination();
         }
+        pickerOpen = false;
     }
 
     // ================================================================
@@ -409,13 +462,28 @@
         );
     }
 
-    function destinationPickerHtml() {
-        const isMatter = destinationType === 'matter';
-        const isClient = destinationType === 'client';
-        const isFirm   = destinationType === 'firm';
+    function destinationBlockHtml() {
+        return (
+            '<div class="form-group">' +
+                '<div class="uppercase" style="margin-bottom:var(--s-2)">Where it lives</div>' +
+                '<div style="display:flex;justify-content:space-between;align-items:center;gap:var(--s-3);padding:var(--s-3) var(--s-4);background:var(--surface-muted);border-radius:var(--r)">' +
+                    '<div style="display:flex;align-items:center;gap:var(--s-2);min-width:0">' +
+                        '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;color:var(--text-muted)"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>' +
+                        '<span class="text-sm fw-500 truncate" id="dm-dest-line">' + esc(destinationLine()) + '</span>' +
+                    '</div>' +
+                    '<button type="button" class="btn btn-ghost btn-sm" id="dm-dest-change" style="flex-shrink:0">Change</button>' +
+                '</div>' +
+                '<div id="dm-dest-picker" style="display:none;margin-top:var(--s-3)">' + pickerHtml() + '</div>' +
+            '</div>'
+        );
+    }
+
+    function pickerHtml() {
+        const isMatter = destination.type === 'matter';
+        const isClient = destination.type === 'client';
+        const isFirm   = destination.type === 'firm';
 
         return (
-            '<div class="uppercase" style="margin-bottom:var(--s-2)">Where it lives</div>' +
             '<div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:var(--s-2)" id="dm-dest-toggle">' +
                 '<button type="button" class="btn btn-sm' + (isFirm ? ' btn-primary' : ' btn-secondary') + '" data-dest="firm">Firm</button>' +
                 '<button type="button" class="btn btn-sm' + (isClient ? ' btn-primary' : ' btn-secondary') + '" data-dest="client">Client</button>' +
@@ -442,9 +510,7 @@
                 sourcePickerHtml(row, isNew) +
             '</div>' +
             '<hr class="form-divider">' +
-            '<div class="form-group">' +
-                destinationPickerHtml() +
-            '</div>' +
+            destinationBlockHtml() +
             '<hr class="form-divider">' +
             '<div class="form-group">' +
                 '<label for="dm-name">Document name</label>' +
@@ -476,11 +542,11 @@
 
         let clientId = null;
         let matterId = null;
-        if (destinationType === 'client') {
-            clientId = selectedClientId || null;
-        } else if (destinationType === 'matter') {
-            clientId = selectedClientId || null;
-            matterId = selectedMatterId || null;
+        if (destination.type === 'client') {
+            clientId = destination.clientId || null;
+        } else if (destination.type === 'matter') {
+            clientId = destination.clientId || null;
+            matterId = destination.matterId || null;
         }
 
         return {
@@ -494,7 +560,7 @@
     }
 
     // ================================================================
-    // WIRING
+    // PICKER WIRING (only runs when Change is expanded)
     // ================================================================
 
     async function loadClients() {
@@ -509,12 +575,10 @@
     }
 
     async function loadMattersForClient(clientId) {
-        if (!mattersCache) mattersCache = {};
         if (mattersCache[clientId]) return mattersCache[clientId];
         try {
             mattersCache[clientId] = await mattersApi.list({ client_id: clientId, limit: 200 });
         } catch (e) {
-            console.warn('[documents-modal] could not load matters:', e);
             mattersCache[clientId] = [];
         }
         return mattersCache[clientId];
@@ -526,44 +590,105 @@
         const list = clientsCache || [];
         sel.innerHTML = '<option value="">— Pick a client —</option>' +
             list.map(function(c) {
-                return '<option value="' + esc(c.id) + '"' + (c.id === selectedClientId ? ' selected' : '') + '>' + esc(c.name) + '</option>';
+                return '<option value="' + esc(c.id) + '"' + (c.id === destination.clientId ? ' selected' : '') + '>' + esc(c.name) + '</option>';
             }).join('');
     }
 
     async function fillMatterSelect() {
         const sel = document.getElementById('dm-matter');
         if (!sel) return;
-        if (!selectedClientId) {
+        if (!destination.clientId) {
             sel.innerHTML = '<option value="">Pick a client first</option>';
             return;
         }
         sel.innerHTML = '<option value="">Loading matters...</option>';
-        const list = await loadMattersForClient(selectedClientId);
+        const list = await loadMattersForClient(destination.clientId);
         sel.innerHTML = '<option value="">— Pick a matter —</option>' +
             list.map(function(m) {
                 const label = (m.matter_number ? m.matter_number + ' · ' : '') + m.title;
-                return '<option value="' + esc(m.id) + '"' + (m.id === selectedMatterId ? ' selected' : '') + '>' + esc(label) + '</option>';
+                return '<option value="' + esc(m.id) + '"' + (m.id === destination.matterId ? ' selected' : '') + '>' + esc(label) + '</option>';
             }).join('');
     }
 
-    function refreshDestinationUI() {
+    async function showPicker() {
+        pickerOpen = true;
+        const wrap = document.getElementById('dm-dest-picker');
+        if (wrap) wrap.style.display = 'block';
+        await loadClients();
+        fillClientSelect();
+        if (destination.type === 'matter') await fillMatterSelect();
+        wirePickerEvents();
+    }
+
+    function updateDestinationLine() {
+        const line = document.getElementById('dm-dest-line');
+        if (line) line.textContent = destinationLine();
+    }
+
+    function refreshPickerToggle() {
+        const toggle = document.getElementById('dm-dest-toggle');
+        if (!toggle) return;
+        toggle.querySelectorAll('button').forEach(function(b) {
+            const active = b.getAttribute('data-dest') === destination.type;
+            b.className = 'btn btn-sm ' + (active ? 'btn-primary' : 'btn-secondary');
+        });
+        const cw = document.getElementById('dm-client-wrap');
+        const mw = document.getElementById('dm-matter-wrap');
+        if (cw) cw.style.display = destination.type === 'firm' ? 'none' : 'block';
+        if (mw) mw.style.display = destination.type === 'matter' ? 'block' : 'none';
+    }
+
+    function wirePickerEvents() {
         const toggle = document.getElementById('dm-dest-toggle');
         if (toggle) {
             toggle.querySelectorAll('button').forEach(function(b) {
-                const active = b.getAttribute('data-dest') === destinationType;
-                b.className = 'btn btn-sm ' + (active ? 'btn-primary' : 'btn-secondary');
+                b.addEventListener('click', async function() {
+                    destination.type = b.getAttribute('data-dest');
+                    if (destination.type === 'firm') {
+                        destination.clientId = '';
+                        destination.matterId = '';
+                        destination.clientName = '';
+                        destination.matterName = '';
+                    } else if (destination.type === 'client') {
+                        destination.matterId = '';
+                        destination.matterName = '';
+                    }
+                    refreshPickerToggle();
+                    if (destination.type === 'matter') await fillMatterSelect();
+                    updateDestinationLine();
+                });
             });
         }
-        const cw = document.getElementById('dm-client-wrap');
-        const mw = document.getElementById('dm-matter-wrap');
-        if (cw) cw.style.display = destinationType === 'firm' ? 'none' : 'block';
-        if (mw) mw.style.display = destinationType === 'matter' ? 'block' : 'none';
 
-        if (destinationType === 'matter') fillMatterSelect();
+        const clientSel = document.getElementById('dm-client');
+        if (clientSel) {
+            clientSel.addEventListener('change', async function() {
+                destination.clientId = clientSel.value;
+                const opt = clientSel.options[clientSel.selectedIndex];
+                destination.clientName = opt ? opt.textContent.replace(/^—\s*|\s*—$/g, '') : '';
+                destination.matterId = '';
+                destination.matterName = '';
+                if (destination.type === 'matter') await fillMatterSelect();
+                updateDestinationLine();
+            });
+        }
+
+        const matterSel = document.getElementById('dm-matter');
+        if (matterSel) {
+            matterSel.addEventListener('change', function() {
+                destination.matterId = matterSel.value;
+                const opt = matterSel.options[matterSel.selectedIndex];
+                destination.matterName = opt ? opt.textContent : '';
+                updateDestinationLine();
+            });
+        }
     }
 
-    async function wireForm(row, mode) {
-        // Source buttons
+    // ================================================================
+    // SOURCE WIRING
+    // ================================================================
+
+    function wireSource() {
         const srcUpload = document.getElementById('dm-src-upload');
         const srcPhoto  = document.getElementById('dm-src-photo');
         const fileInput = document.getElementById('dm-file');
@@ -605,50 +730,10 @@
                 }
                 pickedFile = f;
                 if (pickedEl) {
-                    pickedEl.textContent = f
-                        ? f.name + ' — ' + humanSize(f.size)
-                        : '';
+                    pickedEl.textContent = f ? f.name + ' — ' + humanSize(f.size) : '';
                 }
             });
         }
-
-        // Destination toggle
-        const toggle = document.getElementById('dm-dest-toggle');
-        if (toggle) {
-            toggle.querySelectorAll('button').forEach(function(b) {
-                b.addEventListener('click', function() {
-                    destinationType = b.getAttribute('data-dest');
-                    if (destinationType === 'firm') {
-                        selectedClientId = '';
-                        selectedMatterId = '';
-                    } else if (destinationType === 'client') {
-                        selectedMatterId = '';
-                    }
-                    refreshDestinationUI();
-                });
-            });
-        }
-
-        const clientSel = document.getElementById('dm-client');
-        if (clientSel) {
-            clientSel.addEventListener('change', function() {
-                selectedClientId = clientSel.value;
-                selectedMatterId = '';
-                if (destinationType === 'matter') fillMatterSelect();
-            });
-        }
-
-        const matterSel = document.getElementById('dm-matter');
-        if (matterSel) {
-            matterSel.addEventListener('change', function() {
-                selectedMatterId = matterSel.value;
-            });
-        }
-
-        // Preload clients
-        await loadClients();
-        fillClientSelect();
-        if (destinationType === 'matter') await fillMatterSelect();
     }
 
     // ================================================================
@@ -660,7 +745,14 @@
             '<button class="btn btn-secondary" id="dm-cancel">Cancel</button>' +
             '<button class="btn btn-primary" id="dm-save">Save</button>'
         );
-        await wireForm(row, 'edit');
+        wireSource();
+
+        const changeBtn = document.getElementById('dm-dest-change');
+        if (changeBtn) changeBtn.addEventListener('click', function() {
+            if (pickerOpen) return;
+            showPicker();
+        });
+
         backdropEl.querySelector('#dm-cancel').addEventListener('click', function() {
             if (!busy) renderDetailsView(currentRow);
         });
@@ -673,7 +765,14 @@
             '<button class="btn btn-secondary" id="dm-cancel">Cancel</button>' +
             '<button class="btn btn-primary" id="dm-create">Add document</button>'
         );
-        await wireForm(draft, 'new');
+        wireSource();
+
+        const changeBtn = document.getElementById('dm-dest-change');
+        if (changeBtn) changeBtn.addEventListener('click', function() {
+            if (pickerOpen) return;
+            showPicker();
+        });
+
         backdropEl.querySelector('#dm-cancel').addEventListener('click', function() {
             if (!busy) close();
         });
@@ -684,22 +783,9 @@
     // SAVE HANDLERS
     // ================================================================
 
-    function validateDestination() {
-        if (destinationType === 'client' && !selectedClientId) {
-            alert('Pick a client for this document.');
-            return false;
-        }
-        if (destinationType === 'matter') {
-            if (!selectedClientId) { alert('Pick a client first.'); return false; }
-            if (!selectedMatterId) { alert('Pick a matter for this document.'); return false; }
-        }
-        return true;
-    }
-
     async function saveExisting() {
         const patch = readForm();
         if (!patch.name) { alert('Name is required.'); return; }
-        if (!validateDestination()) return;
 
         busy = true;
         const saveBtn = document.getElementById('dm-save');
@@ -731,7 +817,6 @@
     async function saveNew() {
         const patch = readForm();
         if (!patch.name) { alert('Name is required.'); return; }
-        if (!validateDestination()) return;
 
         busy = true;
         const createBtn = document.getElementById('dm-create');
@@ -750,7 +835,7 @@
             }
             const row = Object.assign({}, patch, {
                 id: newId,
-                source: pickedSource === 'photo' ? 'scanned' : (pickedFile ? 'uploaded' : 'uploaded'),
+                source: pickedSource === 'photo' ? 'scanned' : 'uploaded',
             }, fileMeta || {});
             await docsApi.create(row);
             if (onDoneCb) onDoneCb();
@@ -788,46 +873,43 @@
         pickedFile = null;
         pickedSource = null;
         clientsCache = null;
-        mattersCache = null;
+        mattersCache = {};
         isAdmin = isAdministrator();
         showLoading('Loading...');
         try {
             const row = await docsApi.get(id);
+            // Backfill client_id from embedded matter when the doc has a
+            // matter but no explicit client link (legacy rows).
+            if (row && row.matter_id && !row.client_id
+                && row.lc_matters && row.lc_matters.client_id) {
+                row.client_id = row.lc_matters.client_id;
+            }
             currentRow = row;
+            prepareEditState(row);
+            await hydrateNames();
             renderDetailsView(row);
         } catch (err) {
             showError(err.message || 'Could not load document.');
         }
     }
 
-    function openNew(onDone, preset) {
+    async function openNew(onDone, preset) {
         onDoneCb = onDone || null;
         currentId = null;
         currentRow = null;
         pickedFile = null;
         pickedSource = null;
         clientsCache = null;
-        mattersCache = null;
-        preset = preset || {};
-
-        // Default destination depends on where the modal was opened from.
-        // preset = { clientId, matterId } — either or both may be set.
-        if (preset.matterId) {
-            destinationType = 'matter';
-            selectedClientId = preset.clientId || '';
-            selectedMatterId = preset.matterId;
-        } else if (preset.clientId) {
-            destinationType = 'client';
-            selectedClientId = preset.clientId;
-            selectedMatterId = '';
-        } else {
-            destinationType = 'firm';
-            selectedClientId = '';
-            selectedMatterId = '';
-        }
-
+        mattersCache = {};
+        resetDestination();
         isAdmin = isAdministrator();
         renderNewView();
+        try {
+            await setDestinationFromPreset(preset || {});
+            updateDestinationLine();
+        } catch (e) {
+            console.warn('[documents-modal] preset failed:', e);
+        }
     }
 
     window.LegisCoreDocumentsModal = {
