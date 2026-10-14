@@ -323,6 +323,9 @@
                     window.LegisCoreDocumentsModal.openNew(function() {
                         currentTab = 'documents';
                         loadTabData(currentMatter.id, 'documents');
+                    }, {
+                        clientId: currentMatter.client_id || '',
+                        matterId: currentMatter.id,
                     });
                 }
             });

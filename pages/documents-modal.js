@@ -800,7 +800,7 @@
         }
     }
 
-    function openNew(onDone) {
+    function openNew(onDone, preset) {
         onDoneCb = onDone || null;
         currentId = null;
         currentRow = null;
@@ -808,9 +808,24 @@
         pickedSource = null;
         clientsCache = null;
         mattersCache = null;
-        destinationType = 'firm';
-        selectedClientId = '';
-        selectedMatterId = '';
+        preset = preset || {};
+
+        // Default destination depends on where the modal was opened from.
+        // preset = { clientId, matterId } — either or both may be set.
+        if (preset.matterId) {
+            destinationType = 'matter';
+            selectedClientId = preset.clientId || '';
+            selectedMatterId = preset.matterId;
+        } else if (preset.clientId) {
+            destinationType = 'client';
+            selectedClientId = preset.clientId;
+            selectedMatterId = '';
+        } else {
+            destinationType = 'firm';
+            selectedClientId = '';
+            selectedMatterId = '';
+        }
+
         isAdmin = isAdministrator();
         renderNewView();
     }

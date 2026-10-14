@@ -117,6 +117,7 @@
                 '<div class="page-actions">' +
                     '<a href="#/clients" class="btn btn-ghost btn-sm">&larr; All clients</a>' +
                     '<button class="btn btn-secondary btn-sm" id="client-edit">Edit</button>' +
+                    '<button class="btn btn-secondary btn-sm" id="client-add-doc">Add document</button>' +
                     '<button class="btn btn-primary btn-sm" id="client-new-matter">New matter</button>' +
                 '</div>' +
             '</div>' +
@@ -167,6 +168,16 @@
     function wireActions(client, matters) {
         const edit = document.getElementById('client-edit');
         if (edit) edit.addEventListener('click', function() { openEdit(client); });
+
+        const addDoc = document.getElementById('client-add-doc');
+        if (addDoc) addDoc.addEventListener('click', function() {
+            if (window.LegisCoreDocumentsModal && window.LegisCoreDocumentsModal.openNew) {
+                window.LegisCoreDocumentsModal.openNew(function() {
+                    const container = document.querySelector('.app-main');
+                    if (container) render(container, { id: client.id });
+                }, { clientId: client.id });
+            }
+        });
 
         const newMatter = document.getElementById('client-new-matter');
         if (newMatter) newMatter.addEventListener('click', function() {
