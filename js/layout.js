@@ -21,7 +21,6 @@
         { path: 'documents',       label: 'Documents',      icon: 'doc'   },
         { path: 'matters',         label: 'Matters',        icon: 'brief' },
         { path: 'clients',         label: 'Clients',        icon: 'users' },
-        { path: 'physical-files',  label: 'Physical Files', icon: 'cab'   },
         { path: 'settings',        label: 'Settings',       icon: 'cog'   },
     ];
 
