@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#0b1c3d">
     <title>LegisCore</title>
-    <link rel="stylesheet" href="css/base.css?v=1">
-    <link rel="stylesheet" href="css/layout.css?v=1">
-    <link rel="stylesheet" href="css/components.css?v=1">
+    <link rel="stylesheet" href="css/base.css?v=3">
+    <link rel="stylesheet" href="css/layout.css?v=3">
+    <link rel="stylesheet" href="css/components.css?v=3">
 </head>
 <body>
     <div id="app">
@@ -17,14 +17,24 @@
         </div>
     </div>
 
-    <!-- Load order: config -> api layer -> state -> router -> pages -> layout -> app bootstrap -->
+    <!--
+      Load order is load-order-sensitive.
+      1. config      — no deps
+      2. api.js      — depends on config
+      3. state.js    — no deps, but other modules need it loaded FIRST
+      4. api/*       — depend on api.js + state.js
+      5. router.js   — depends on state
+      6. pages/*     — depend on api + state + router
+      7. layout.js   — depends on state + router
+      8. app.js      — orchestrates everything
+    -->
     <script src="js/config.js"></script>
     <script src="js/api.js"></script>
+    <script src="js/state.js"></script>
     <script src="js/api/auth-api.js"></script>
     <script src="js/api/documents-api.js"></script>
     <script src="js/api/matters-api.js"></script>
     <script src="js/api/storage-api.js"></script>
-    <script src="js/state.js"></script>
     <script src="js/router.js"></script>
     <script src="pages/dashboard.js"></script>
     <script src="pages/documents.js"></script>
