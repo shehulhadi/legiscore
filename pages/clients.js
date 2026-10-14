@@ -141,10 +141,14 @@
 
     function renderRow(c) {
         const matterCount = matterCountMap[c.id] || 0;
+        const matterLabel = matterCount === 1 ? '1 matter' : matterCount + ' matters';
+
+        // Line 1: name + type badge, side by side.
+        // Line 2: matter count and one contact detail only — no overflow on phone.
         const subParts = [];
+        if (matterCount > 0) subParts.push(matterLabel);
         if (c.phone) subParts.push(c.phone);
-        if (c.email) subParts.push(c.email);
-        if (matterCount > 0) subParts.push(matterCount + (matterCount === 1 ? ' matter' : ' matters'));
+        else if (c.email) subParts.push(c.email);
 
         const sub = subParts.length
             ? '<div class="doc-sub">' +
@@ -156,13 +160,13 @@
             '<div class="doc-row" data-client-id="' + esc(c.id) + '">' +
                 '<div class="user-avatar">' + esc(initials(c.name)) + '</div>' +
                 '<div class="doc-meta">' +
-                    '<div class="doc-name">' + esc(c.name) + '</div>' +
+                    '<div style="display:flex;align-items:center;gap:var(--s-2);min-width:0">' +
+                        '<div class="doc-name" style="flex:1;min-width:0">' + esc(c.name) + '</div>' +
+                        typeBadge(c.client_type) +
+                    '</div>' +
                     sub +
                 '</div>' +
-                '<div style="display:flex;align-items:center;gap:var(--s-2);flex-shrink:0">' +
-                    typeBadge(c.client_type) +
-                    '<svg class="doc-action" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>' +
-                '</div>' +
+                '<svg class="doc-action" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>' +
             '</div>'
         );
     }
