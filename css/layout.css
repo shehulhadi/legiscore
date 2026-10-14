@@ -126,6 +126,77 @@
 }
 .sidebar-toggle-btn:hover { background: var(--surface-muted); }
 
+.sidebar-collapse-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--r);
+    width: 36px;
+    height: 36px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    cursor: pointer;
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+.sidebar-collapse-btn:hover {
+    background: var(--surface-muted);
+    color: var(--text);
+}
+.sidebar-collapse-btn svg {
+    transition: transform var(--dur-3) var(--ease-out);
+}
+
+@media (max-width: 900px) {
+    .sidebar-collapse-btn { display: none; }
+}
+
+@media (min-width: 901px) {
+    .app-shell.sidebar-collapsed {
+        grid-template-columns: 68px 1fr;
+    }
+    .app-shell.sidebar-collapsed .sidebar-collapse-btn svg {
+        transform: rotate(180deg);
+    }
+    .app-shell.sidebar-collapsed .sidebar-header {
+        padding: 0 var(--s-2) var(--s-3);
+    }
+    .app-shell.sidebar-collapsed .sidebar-brand {
+        justify-content: center;
+        gap: 0;
+    }
+    .app-shell.sidebar-collapsed .sidebar-brand-text {
+        display: none;
+    }
+    .app-shell.sidebar-collapsed .sidebar-nav {
+        padding: 0 var(--s-2);
+    }
+    .app-shell.sidebar-collapsed .nav-section-title {
+        display: none;
+    }
+    .app-shell.sidebar-collapsed .nav-item {
+        justify-content: center;
+        padding: 10px 6px;
+    }
+    .app-shell.sidebar-collapsed .nav-item > span:not(.nav-badge) {
+        display: none;
+    }
+    .app-shell.sidebar-collapsed .nav-item.active::before {
+        display: none;
+    }
+    .app-shell.sidebar-collapsed .sidebar-footer {
+        padding: var(--s-3) var(--s-2);
+        justify-content: center;
+    }
+    .app-shell.sidebar-collapsed .sidebar-footer > div {
+        font-size: 0;
+    }
+    .app-shell.sidebar-collapsed .sidebar-footer > div .dot {
+        font-size: 6px;
+    }
+}
+
 /* ---- User avatar ---------------------------------------------------- */
 
 .user-avatar {

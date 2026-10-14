@@ -32,6 +32,7 @@
         cab:   '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>',
         cog:   '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
         menu:  '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>',
+        chevron: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>',
         x:     '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
     };
 
@@ -47,7 +48,7 @@
         const items = NAV_ITEMS.map(function(item) {
             return (
                 '<li>' +
-                    '<a href="#/' + item.path + '" class="nav-item" data-route="' + item.path + '">' +
+                    '<a href="#/' + item.path + '" class="nav-item" data-route="' + item.path + '" title="' + item.label + '">' +
                         (ICONS[item.icon] || '') +
                         '<span>' + item.label + '</span>' +
                     '</a>' +
@@ -94,6 +95,9 @@
                 '<div class="topbar-left">' +
                     '<button class="sidebar-toggle-btn" id="sidebar-toggle-btn" aria-label="Toggle sidebar">' +
                         ICONS.menu +
+                    '</button>' +
+                    '<button class="sidebar-collapse-btn" id="sidebar-collapse-btn" aria-label="Collapse sidebar" title="Collapse sidebar">' +
+                        ICONS.chevron +
                     '</button>' +
                     '<h1 class="topbar-title" id="topbar-title">Dashboard</h1>' +
                 '</div>' +
@@ -192,7 +196,7 @@
         }
 
         root.innerHTML =
-            '<div class="app-shell">' +
+            '<div class="app-shell" id="app-shell">' +
                 renderSidebar() +
                 renderTopbar() +
                 '<main class="app-main" id="app-main"></main>' +
@@ -212,6 +216,23 @@
         });
 
         loadFirmName();
+        initSidebarCollapse();
+    }
+
+    function initSidebarCollapse() {
+        const shell = document.getElementById('app-shell');
+        const btn = document.getElementById('sidebar-collapse-btn');
+        if (!shell || !btn) return;
+        const KEY = 'legiscore_sidebar_collapsed';
+        let collapsed = false;
+        try { collapsed = localStorage.getItem(KEY) === '1'; } catch (_) {}
+        if (collapsed) shell.classList.add('sidebar-collapsed');
+        btn.addEventListener('click', function() {
+            const now = !shell.classList.contains('sidebar-collapsed');
+            shell.classList.toggle('sidebar-collapsed', now);
+            btn.setAttribute('title', now ? 'Expand sidebar' : 'Collapse sidebar');
+            try { localStorage.setItem(KEY, now ? '1' : '0'); } catch (_) {}
+        });
     }
 
     async function loadFirmName() {
