@@ -15,6 +15,11 @@
         return;
     }
 
+    function logActivity(opts) {
+        const a = window.LegisCoreActivitiesApi;
+        if (a && a.logActivity) a.logActivity(opts);
+    }
+
     const TABLE = 'lc_matters';
     const SELECT = '*,lc_clients(id,name)';
 
@@ -103,7 +108,13 @@
             headers: { 'Prefer': 'return=representation' },
             body: JSON.stringify([row]),
         });
-        return Array.isArray(rows) ? rows[0] : row;
+        const created = Array.isArray(rows) ? rows[0] : row;
+        logActivity({
+            text: "Opened matter '" + row.title + "'",
+            refType: 'matter',
+            refId: created.id,
+        });
+        return created;
     }
 
     async function update(id, patch) {
@@ -126,15 +137,35 @@
                 body: JSON.stringify(body),
             }
         );
-        return Array.isArray(rows) ? rows[0] : null;
+        const updated = Array.isArray(rows) ? rows[0] : null;
+        const label = (updated && updated.title) || body.title || id;
+        const isClosing = body.status === 'closed';
+        logActivity({
+            text: (isClosing ? "Closed matter '" : "Updated matter '") + label + "'",
+            refType: 'matter',
+            refId: id,
+        });
+        return updated;
     }
 
     async function remove(id) {
         if (!id) throw new api.ApiError(400, 'Matter id is required.');
+
+        let label = id;
+        try {
+            const before = await get(id);
+            if (before && before.title) label = before.title;
+        } catch (_) { /* proceed even if lookup fails */ }
+
         await api.rest(
             '/' + TABLE + '?id=eq.' + encodeURIComponent(id),
             { method: 'DELETE' }
         );
+        logActivity({
+            text: "Deleted matter '" + label + "'",
+            refType: 'matter',
+            refId: id,
+        });
         return true;
     }
 

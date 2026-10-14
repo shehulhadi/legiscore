@@ -534,6 +534,13 @@
                     headers: { 'Prefer': 'return=representation' },
                     body: JSON.stringify(body),
                 });
+                if (window.LegisCoreActivitiesApi && window.LegisCoreActivitiesApi.logActivity) {
+                    window.LegisCoreActivitiesApi.logActivity({
+                        text: "Set deadline '" + title + "'",
+                        refType: 'deadline',
+                        refId: id,
+                    });
+                }
                 closeModal();
                 currentTab = 'deadlines';
                 loadTabData(matter.id, 'deadlines');

@@ -15,6 +15,11 @@
         return;
     }
 
+    function logActivity(opts) {
+        const a = window.LegisCoreActivitiesApi;
+        if (a && a.logActivity) a.logActivity(opts);
+    }
+
     const TABLE = 'lc_clients';
 
     function orgId() {
@@ -94,7 +99,13 @@
             headers: { 'Prefer': 'return=representation' },
             body: JSON.stringify([row]),
         });
-        return Array.isArray(rows) ? rows[0] : row;
+        const created = Array.isArray(rows) ? rows[0] : row;
+        logActivity({
+            text: "Added client '" + row.name + "'",
+            refType: 'client',
+            refId: created.id,
+        });
+        return created;
     }
 
     async function update(id, patch) {
@@ -117,15 +128,34 @@
                 body: JSON.stringify(body),
             }
         );
-        return Array.isArray(rows) ? rows[0] : null;
+        const updated = Array.isArray(rows) ? rows[0] : null;
+        const label = (updated && updated.name) || body.name || id;
+        logActivity({
+            text: "Updated client '" + label + "'",
+            refType: 'client',
+            refId: id,
+        });
+        return updated;
     }
 
     async function remove(id) {
         if (!id) throw new api.ApiError(400, 'Client id is required.');
+
+        let label = id;
+        try {
+            const before = await get(id);
+            if (before && before.name) label = before.name;
+        } catch (_) { /* proceed even if lookup fails */ }
+
         await api.rest(
             '/' + TABLE + '?id=eq.' + encodeURIComponent(id),
             { method: 'DELETE' }
         );
+        logActivity({
+            text: "Deleted client '" + label + "'",
+            refType: 'client',
+            refId: id,
+        });
         return true;
     }
 

@@ -18,6 +18,11 @@
         return;
     }
 
+    function logActivity(opts) {
+        const a = window.LegisCoreActivitiesApi;
+        if (a && a.logActivity) a.logActivity(opts);
+    }
+
     const TABLE = 'lc_documents';
     const SELECT = '*,lc_matters(id,title,matter_number),lc_clients(id,name)';
 
@@ -124,7 +129,13 @@
             headers: { 'Prefer': 'return=representation' },
             body: JSON.stringify([row]),
         });
-        return Array.isArray(rows) ? rows[0] : row;
+        const created = Array.isArray(rows) ? rows[0] : row;
+        logActivity({
+            text: "Added document '" + row.name + "'",
+            refType: 'document',
+            refId: created.id,
+        });
+        return created;
     }
 
     async function update(id, patch) {
@@ -151,15 +162,35 @@
                 body: JSON.stringify(body),
             }
         );
-        return Array.isArray(rows) ? rows[0] : null;
+        const updated = Array.isArray(rows) ? rows[0] : null;
+        const label = (updated && updated.name) || body.name || id;
+        logActivity({
+            text: "Updated document '" + label + "'",
+            refType: 'document',
+            refId: id,
+        });
+        return updated;
     }
 
     async function remove(id) {
         if (!id) throw new api.ApiError(400, 'Document id is required.');
+
+        // Grab the name first so the activity text is human-readable.
+        let label = id;
+        try {
+            const before = await get(id);
+            if (before && before.name) label = before.name;
+        } catch (_) { /* proceed even if lookup fails */ }
+
         await api.rest(
             '/' + TABLE + '?id=eq.' + encodeURIComponent(id),
             { method: 'DELETE' }
         );
+        logActivity({
+            text: "Deleted document '" + label + "'",
+            refType: 'document',
+            refId: id,
+        });
         return true;
     }
 
