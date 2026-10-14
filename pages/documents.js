@@ -90,7 +90,8 @@
 
     // ---- view state ---------------------------------------------------
 
-    let filters = { q: '', document_type: '', status: '' };
+    let filters = { q: '', document_type: '', status: '', client_id: '', firm_only: false };
+    let clientsCache = null;
     let rows = [];
     let hasMore = false;
     let loading = false;
@@ -236,7 +237,7 @@
         const clearBtn = document.getElementById('docs-clear-filters');
         if (clearBtn) {
             clearBtn.addEventListener('click', function() {
-                filters = { q: '', document_type: '', status: '' };
+                filters = { q: '', document_type: '', status: '', client_id: '', firm_only: false };
                 renderFilterUI();
                 load(true);
             });
@@ -264,6 +265,66 @@
             '</div>';
         const btn = document.getElementById('docs-load-more');
         if (btn) btn.addEventListener('click', function() { load(false); });
+    }
+
+    async function loadClients() {
+        if (clientsCache) return clientsCache;
+        try {
+            const api = window.LegisCoreClientsApi;
+            if (api && api.list) {
+                clientsCache = await api.list({ limit: 100 });
+            } else {
+                clientsCache = [];
+            }
+        } catch (e) {
+            console.warn('[LegisCoreDocuments] could not load clients:', e);
+            clientsCache = [];
+        }
+        return clientsCache;
+    }
+
+    function renderDestinationChips() {
+        const allActive = !filters.firm_only && !filters.client_id;
+        const firmActive = filters.firm_only;
+        const chips = [
+            '<button class="chip' + (allActive ? ' active' : '') + '" data-dest="all">All documents</button>',
+            '<button class="chip' + (firmActive ? ' active' : '') + '" data-dest="firm">Firm</button>',
+        ];
+        (clientsCache || []).forEach(function(c) {
+            const active = filters.client_id === c.id;
+            chips.push(
+                '<button class="chip' + (active ? ' active' : '') + '" data-dest="client" data-client-id="' + esc(c.id) + '">' + esc(c.name) + '</button>'
+            );
+        });
+        return '<div class="chip-row" id="docs-dest-chips">' + chips.join('') + '</div>';
+    }
+
+    function wireDestinationChips() {
+        const chips = document.getElementById('docs-dest-chips');
+        if (!chips) return;
+        chips.querySelectorAll('.chip').forEach(function(c) {
+            c.addEventListener('click', function() {
+                const dest = c.getAttribute('data-dest');
+                if (dest === 'all') {
+                    filters.firm_only = false;
+                    filters.client_id = '';
+                } else if (dest === 'firm') {
+                    filters.firm_only = true;
+                    filters.client_id = '';
+                } else if (dest === 'client') {
+                    filters.firm_only = false;
+                    filters.client_id = c.getAttribute('data-client-id') || '';
+                }
+                refreshDestinationUI();
+                load(true);
+            });
+        });
+    }
+
+    function refreshDestinationUI() {
+        const wrap = document.getElementById('docs-dest-chips-wrap');
+        if (wrap) wrap.innerHTML = renderDestinationChips();
+        wireDestinationChips();
     }
 
     function renderChips() {
@@ -370,13 +431,18 @@
                     '<input type="search" id="docs-search" class="form-control" placeholder="Find a document by name or type..." autocomplete="off">' +
                     '<select id="docs-status" class="form-control">' + statusOpts + '</select>' +
                 '</div>' +
-                '<div id="docs-chips-wrap" style="margin-top:var(--s-3)">' + renderChips() + '</div>' +
+                '<div id="docs-dest-chips-wrap" style="margin-top:var(--s-3)">' + renderDestinationChips() + '</div>' +
+                '<div id="docs-chips-wrap" style="margin-top:var(--s-2)">' + renderChips() + '</div>' +
             '</div>' +
             '<div id="docs-list">' + renderSkeleton() + '</div>' +
             '<div id="docs-more"></div>';
 
         wireFilters();
         wireChips();
+        loadClients().then(function() {
+            refreshDestinationUI();
+        });
+        wireDestinationChips();
         load(true);
     }
 

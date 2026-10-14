@@ -57,6 +57,10 @@
         if (filters.client_id) {
             parts.push('client_id=eq.' + encodeURIComponent(filters.client_id));
         }
+        if (filters.firm_only) {
+            parts.push('client_id=is.null');
+            parts.push('matter_id=is.null');
+        }
         if (filters.status) {
             parts.push('status=eq.' + encodeURIComponent(filters.status));
         }
