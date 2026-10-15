@@ -193,7 +193,10 @@
                                 (row.file_size ? esc(humanSize(row.file_size)) : '') +
                             '</div>' +
                         '</div>' +
-                        '<button type="button" class="btn btn-primary btn-sm" id="dm-download">Download</button>' +
+                        '<div style="display:flex;gap:var(--s-2);flex-wrap:wrap">' +
+                            '<button type="button" class="btn btn-primary btn-sm" id="dm-download">Download</button>' +
+                            '<button type="button" class="btn btn-secondary btn-sm" id="dm-share">Share</button>' +
+                        '</div>' +
                     '</div>' +
                     '<div id="dm-preview-box" style="margin-top:var(--s-3)"></div>' +
                 '</div>'
@@ -274,6 +277,65 @@
                 .catch(function(err) { alert('Could not open file: ' + (err.message || 'unknown error')); })
                 .finally(function() { dlBtn.disabled = false; dlBtn.textContent = 'Download'; });
         });
+
+        const shBtn = backdropEl.querySelector('#dm-share');
+        if (shBtn) shBtn.addEventListener('click', function() {
+            shareDocument(row, shBtn);
+        });
+    }
+
+    async function copyToClipboard(text) {
+        try {
+            await navigator.clipboard.writeText(text);
+            return true;
+        } catch (_) {
+            try {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                ta.style.position = 'fixed';
+                ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                ta.select();
+                const ok = document.execCommand('copy');
+                document.body.removeChild(ta);
+                return ok;
+            } catch (e) {
+                return false;
+            }
+        }
+    }
+
+    async function shareDocument(row, btn) {
+        if (!row || !row.storage_key) return;
+        const originalText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'Preparing...';
+
+        try {
+            const url = await storageApi.getSignedUrl(row.storage_key, 3600);
+            const title = row.name || 'LegisCore document';
+            const text = 'LegisCore document: ' + title;
+
+            if (navigator.share) {
+                try {
+                    await navigator.share({ title: title, text: text, url: url });
+                } catch (shareErr) {
+                    // User cancelled the share sheet — silent, no error
+                    if (shareErr && shareErr.name !== 'AbortError') throw shareErr;
+                }
+            } else {
+                const ok = await copyToClipboard(url);
+                alert(ok
+                    ? 'Link copied to clipboard.\n\nIt expires in 1 hour.'
+                    : 'Could not share automatically. Please use Download instead.');
+            }
+        } catch (err) {
+            console.error('[documents-modal] share failed:', err);
+            alert('Could not prepare the link: ' + (err.message || 'unknown error'));
+        } finally {
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }
     }
 
     async function loadPreview(row) {
